@@ -20,7 +20,6 @@ def _read_json(path: Path):
 
 
 def _period_label(audit: dict | None) -> str | None:
-    # Exact time range is not inferred unless it exists in an analysis output.
     if not audit:
         return None
     return audit.get("period_label")
@@ -28,19 +27,19 @@ def _period_label(audit: dict | None) -> str | None:
 
 def build_dashboard_snapshot() -> dict:
     audit = _read_json(AUDIT_PATH)
-
     now = datetime.now(timezone.utc)
-    snapshot = {
+
+    return {
         "project": {
             "title": "Digital Economy × TFP Research",
             "language": "fa",
         },
         "stage": {
-            "short": "Model Specification",
-            "title": "مدل نهایی در انتظار دستور دقیق استاد",
+            "short": "در انتظار مدل نهایی",
+            "title": "فعلاً منتظر توضیحات دقیق استاد هستیم",
             "description": (
-                "زیرساخت داده و اجرای Python آماده است. "
-                "برآورد نهایی فقط بعد از دریافت specification استاد انجام می‌شود."
+                "بخش ورود و کنترل داده آماده است. "
+                "مدل اصلی را بعد از دریافت نکات استاد وارد می‌کنیم تا چیزی از روی حدس اجرا نشود."
             ),
         },
         "generated_at": now.isoformat(timespec="seconds"),
@@ -67,7 +66,6 @@ def build_dashboard_snapshot() -> dict:
             "diagnostics": [],
         },
     }
-    return snapshot
 
 
 def write_dashboard_snapshot() -> Path:
