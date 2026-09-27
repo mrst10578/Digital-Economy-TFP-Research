@@ -4,6 +4,7 @@ import pandas as pd
 from src.config import RAW_DATA, PROCESSED_DATA, TABLE_DIR
 from src.data_check import audit_data, validate_minimum_structure
 from src.prepare_data import prepare_data
+from src.dashboard_export import write_dashboard_snapshot
 
 
 def main():
@@ -39,9 +40,12 @@ def main():
     if numeric.shape[1] >= 2:
         numeric.corr().to_csv(TABLE_DIR / "correlation_matrix.csv")
 
+    dashboard_path = write_dashboard_snapshot()
+
     print("\nپیش‌پردازش و کنترل اولیه تمام شد.")
     print(f"داده تمیزشده: {PROCESSED_DATA}")
     print(f"گزارش کنترل داده: {TABLE_DIR / 'data_audit.json'}")
+    print(f"داده داشبورد: {dashboard_path}")
     print("مدل نهایی عمداً اجرا نشد چون دستور دقیق استاد هنوز دریافت نشده.")
 
 
