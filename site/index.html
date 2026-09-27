@@ -3,126 +3,288 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#07111f" />
-  <title>Digital Economy × TFP Research</title>
-  <meta name="description" content="داشبورد وضعیت پروژه تحلیل اقتصادسنجی اقتصاد دیجیتال و بهره‌وری کل عوامل تولید" />
+  <meta name="theme-color" content="#07111b" />
+  <meta name="color-scheme" content="dark" />
+  <title>Digital Economy × TFP | Research Portal</title>
+  <meta name="description" content="پرتال پژوهش اقتصادسنجی اقتصاد دیجیتال و بهره‌وری کل عوامل تولید" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="noise"></div>
+  <div class="ambient a1"></div>
+  <div class="ambient a2"></div>
 
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-mark">Σ</div>
-      <div>
+    <a class="brand" href="#overview" aria-label="خانه">
+      <span class="brand-mark">Σ</span>
+      <span class="brand-copy">
         <strong>Digital Economy × TFP</strong>
-        <span>Research Workspace</span>
-      </div>
+        <small>Econometric Research Portal</small>
+      </span>
+    </a>
+
+    <nav class="nav" aria-label="ناوبری اصلی">
+      <a href="#data">داده</a>
+      <a href="#model">مدل</a>
+      <a href="#results">نتایج</a>
+      <a href="#workflow">فرایند</a>
+    </nav>
+
+    <div class="system-state">
+      <span class="pulse"></span>
+      <span id="headerStage">در حال بارگذاری</span>
     </div>
-    <div class="live"><i></i> پروژه در حال توسعه</div>
   </header>
 
   <main class="shell">
-    <section class="hero">
-      <div class="eyebrow">ECONOMETRIC RESEARCH WORKSPACE</div>
-      <h1>زیرساخت تحلیل آماده است.<br><span>مدل نهایی منتظر مشخصات استاد است.</span></h1>
-      <p>
-        ساختار Python، کنترل کیفیت داده، پاک‌سازی، گزارش Audit و خروجی‌های اولیه آماده شده‌اند.
-        بخش برآورد عمداً بدون حدس باقی مانده تا دقیقاً مطابق مدل موردنظر استاد پیاده‌سازی شود.
-      </p>
-      <div class="hero-actions">
-        <a href="#status" class="btn primary">مشاهده وضعیت پروژه</a>
-        <a href="#pipeline" class="btn ghost">مسیر اجرا</a>
-      </div>
-    </section>
-
-    <section id="status" class="status-grid">
-      <article class="status-card ready">
-        <div class="status-line"><span>Data Pipeline</span><b>READY</b></div>
-        <h3>ورود و کنترل داده</h3>
-        <p>ساختار ورودی، نرمال‌سازی ستون‌ها، داده‌های گمشده و رکوردهای تکراری کنترل می‌شوند.</p>
-      </article>
-
-      <article class="status-card ready">
-        <div class="status-line"><span>Python Workspace</span><b>READY</b></div>
-        <h3>زیرساخت تحلیل</h3>
-        <p>پروژه ماژولار است و مسیر تولید داده تمیز، آمار توصیفی و ماتریس همبستگی آماده است.</p>
-      </article>
-
-      <article class="status-card waiting">
-        <div class="status-line"><span>Model Specification</span><b>PENDING</b></div>
-        <h3>مدل اقتصادسنجی</h3>
-        <p>فرم دقیق مدل، estimator و آزمون‌های مدنظر استاد فردا روی همین زیرساخت سوار می‌شوند.</p>
-      </article>
-
-      <article class="status-card waiting">
-        <div class="status-line"><span>Estimation</span><b>PENDING</b></div>
-        <h3>برآورد و نتایج</h3>
-        <p>تا دریافت داده و specification نهایی، هیچ ضریب یا نتیجه آماری به‌صورت ساختگی تولید نمی‌شود.</p>
-      </article>
-    </section>
-
-    <section id="pipeline" class="panel">
-      <div class="section-title">
-        <span>PIPELINE</span>
-        <h2>مسیر اجرای پروژه</h2>
-      </div>
-      <div class="timeline">
-        <div class="step done"><em>01</em><div><b>Data Intake</b><span>ساختار ورودی و قرارداد داده</span></div></div>
-        <div class="step done"><em>02</em><div><b>Quality Audit</b><span>Missing، Duplicate، نوع داده و ساختار واحد-زمان</span></div></div>
-        <div class="step done"><em>03</em><div><b>Preparation</b><span>پاک‌سازی و ساخت خروجی پردازش‌شده</span></div></div>
-        <div class="step current"><em>04</em><div><b>Model Specification</b><span>در انتظار نکات دقیق استاد</span></div></div>
-        <div class="step"><em>05</em><div><b>Estimation</b><span>برآورد مدل در Python</span></div></div>
-        <div class="step"><em>06</em><div><b>Diagnostics & Reporting</b><span>آزمون‌ها، جداول، نمودارها و تفسیر</span></div></div>
-      </div>
-    </section>
-
-    <section class="two-col">
-      <article class="panel">
-        <div class="section-title">
-          <span>READY COMPONENTS</span>
-          <h2>بخش‌های آماده</h2>
-        </div>
-        <ul class="clean-list">
-          <li><span>✓</span> کنترل نام و ساختار ستون‌ها</li>
-          <li><span>✓</span> بررسی داده‌های گمشده</li>
-          <li><span>✓</span> بررسی رکوردهای تکراری</li>
-          <li><span>✓</span> بررسی اولیه ساختار پنلی</li>
-          <li><span>✓</span> آمار توصیفی</li>
-          <li><span>✓</span> ماتریس همبستگی متغیرهای عددی</li>
-          <li><span>✓</span> Smoke Test خودکار</li>
-        </ul>
-      </article>
-
-      <article class="panel caution">
-        <div class="section-title">
-          <span>RESEARCH INTEGRITY</span>
-          <h2>چیزی که فعلاً قفل است</h2>
-        </div>
-        <p>
-          مدل برآورد، نوع estimator، lag structure، interaction، روش‌های IV/GMM و آزمون‌های تشخیصی
-          تا زمانی که دستور دقیق استاد مشخص نشود، نهایی نمی‌شوند.
+    <section id="overview" class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">RESEARCH COMMAND CENTER</p>
+        <h1>پرتال اجرایی پژوهش اقتصادسنجی</h1>
+        <p class="lead">
+          این صفحه صرفاً گزارش کار نیست. ساختار آن برای نمایش داده واقعی، مشخصات مدل،
+          نتایج برآورد، آزمون‌های تشخیصی و خروجی‌های نهایی پژوهش طراحی شده است.
         </p>
-        <div class="integrity">نتیجه ساختگی: <strong>۰</strong></div>
+
+        <div class="hero-actions">
+          <a class="button primary" href="#results">ورود به نتایج</a>
+          <a class="button" href="./downloads/dataset_template.csv" download>دانلود قالب داده</a>
+        </div>
+      </div>
+
+      <aside class="hero-side">
+        <div class="state-card">
+          <div class="state-card-top">
+            <span>وضعیت پژوهش</span>
+            <span class="badge waiting" id="stageBadge">PENDING</span>
+          </div>
+          <strong id="stageTitle">در حال دریافت وضعیت</strong>
+          <p id="stageDescription">اطلاعات پروژه از خروجی تحلیل خوانده می‌شود.</p>
+          <div class="state-meta">
+            <span>آخرین به‌روزرسانی</span>
+            <b id="lastUpdated">...</b>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="metrics" aria-label="شاخص‌های داده">
+      <article class="metric">
+        <span>مشاهدات</span>
+        <strong id="metricRows">—</strong>
+        <small>Observations</small>
+      </article>
+      <article class="metric">
+        <span>واحدهای مقطعی</span>
+        <strong id="metricEntities">—</strong>
+        <small>Entities</small>
+      </article>
+      <article class="metric">
+        <span>بازه زمانی</span>
+        <strong id="metricPeriod">—</strong>
+        <small>Time span</small>
+      </article>
+      <article class="metric">
+        <span>داده گمشده</span>
+        <strong id="metricMissing">—</strong>
+        <small>Missing cells</small>
       </article>
     </section>
 
-    <section class="panel technical">
-      <div class="section-title">
-        <span>TECH STACK</span>
-        <h2>زیرساخت فنی</h2>
+    <section id="data" class="section-grid">
+      <article class="panel span-7">
+        <div class="section-head">
+          <div>
+            <p class="kicker">DATA LAYER</p>
+            <h2>کنترل کیفیت و آماده‌سازی داده</h2>
+          </div>
+          <span class="badge ready">PIPELINE READY</span>
+        </div>
+
+        <div class="audit-grid">
+          <div class="audit-item">
+            <span>کل ستون‌ها</span>
+            <b id="auditColumns">—</b>
+          </div>
+          <div class="audit-item">
+            <span>کلید تکراری واحد-زمان</span>
+            <b id="auditDuplicates">—</b>
+          </div>
+          <div class="audit-item">
+            <span>حداقل دوره برای هر واحد</span>
+            <b id="auditMinPeriods">—</b>
+          </div>
+          <div class="audit-item">
+            <span>حداکثر دوره برای هر واحد</span>
+            <b id="auditMaxPeriods">—</b>
+          </div>
+        </div>
+
+        <div class="data-note" id="dataNote">
+          داده واقعی هنوز به pipeline متصل نشده است. به محض ورود فایل نهایی،
+          این بخش مستقیماً از خروجی Python پر می‌شود.
+        </div>
+      </article>
+
+      <article class="panel span-5">
+        <div class="section-head">
+          <div>
+            <p class="kicker">INPUT CONTRACT</p>
+            <h2>ساختار ورودی</h2>
+          </div>
+        </div>
+        <div class="variable-list" id="expectedColumns"></div>
+      </article>
+    </section>
+
+    <section id="model" class="section-grid">
+      <article class="panel span-5">
+        <div class="section-head">
+          <div>
+            <p class="kicker">MODEL SPECIFICATION</p>
+            <h2>مدل اقتصادسنجی</h2>
+          </div>
+          <span class="badge waiting" id="modelBadge">AWAITING SPEC</span>
+        </div>
+
+        <div class="model-lock">
+          <span class="lock-icon">⌁</span>
+          <div>
+            <strong id="modelTitle">مدل نهایی هنوز قفل نشده است</strong>
+            <p id="modelMessage">
+              فرم تابعی، estimator، وقفه‌ها، interaction و آزمون‌های تشخیصی
+              بعد از دریافت نکات دقیق استاد تعیین می‌شوند.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="panel span-7">
+        <div class="section-head">
+          <div>
+            <p class="kicker">SPECIFICATION CHECKLIST</p>
+            <h2>مواردی که قبل از برآورد قطعی می‌شوند</h2>
+          </div>
+        </div>
+
+        <div class="spec-grid">
+          <div><span>01</span><b>معادله دقیق</b><small>Functional form</small></div>
+          <div><span>02</span><b>متغیر وابسته</b><small>Dependent variable</small></div>
+          <div><span>03</span><b>متغیرهای توضیحی</b><small>Regressors</small></div>
+          <div><span>04</span><b>نوع estimator</b><small>Estimator</small></div>
+          <div><span>05</span><b>ساختار اثرات</b><small>Effects</small></div>
+          <div><span>06</span><b>آزمون‌ها</b><small>Diagnostics</small></div>
+        </div>
+      </article>
+    </section>
+
+    <section id="results" class="results-section">
+      <div class="section-head results-head">
+        <div>
+          <p class="kicker">ESTIMATION OUTPUT</p>
+          <h2>نتایج برآورد</h2>
+        </div>
+        <span class="badge neutral" id="resultsBadge">NO ESTIMATE YET</span>
       </div>
-      <div class="chips">
-        <span>Python</span><span>pandas</span><span>NumPy</span><span>statsmodels</span>
-        <span>linearmodels</span><span>Matplotlib</span><span>Jupyter</span><span>GitHub Actions</span>
+
+      <div class="result-grid">
+        <article class="panel result-panel">
+          <div class="mini-title">
+            <span>COEFFICIENTS</span>
+            <b>جدول ضرایب</b>
+          </div>
+          <div class="empty-state" id="coefficientsState">
+            <div class="empty-mark">β</div>
+            <strong>هنوز نتیجه‌ای منتشر نشده است</strong>
+            <p>پس از دریافت مدل و داده واقعی، coefficient، standard error، p-value و confidence interval اینجا قرار می‌گیرند.</p>
+          </div>
+          <div id="coefficientsTable" class="table-wrap hidden"></div>
+        </article>
+
+        <article class="panel result-panel">
+          <div class="mini-title">
+            <span>DIAGNOSTICS</span>
+            <b>آزمون‌های تشخیصی</b>
+          </div>
+          <div class="empty-state compact" id="diagnosticsState">
+            <div class="empty-mark">χ²</div>
+            <strong>در انتظار specification نهایی</strong>
+            <p>آزمون‌ها فقط متناسب با مدل نهایی اجرا می‌شوند.</p>
+          </div>
+          <div id="diagnosticsList" class="diagnostics hidden"></div>
+        </article>
       </div>
-      <p class="muted">کتابخانه‌ها متناسب با مدل نهایی بازبینی می‌شوند. وجود یک کتابخانه به معنی قطعی بودن روش برآورد نیست.</p>
+
+      <article class="panel chart-panel">
+        <div class="mini-title">
+          <span>RESEARCH FIGURES</span>
+          <b>نمودارهای پژوهش</b>
+        </div>
+        <div class="chart-empty" id="chartState">
+          <svg viewBox="0 0 900 220" role="img" aria-label="فضای نمودار">
+            <path d="M30 180H870" />
+            <path d="M30 30V180" />
+            <path class="ghost-line" d="M60 160 C180 150, 240 120, 330 130 S520 70, 620 90 S760 50,840 65" />
+          </svg>
+          <p>هیچ سری واقعی هنوز به داشبورد متصل نشده است.</p>
+        </div>
+      </article>
+    </section>
+
+    <section id="workflow" class="panel workflow-panel">
+      <div class="section-head">
+        <div>
+          <p class="kicker">REPRODUCIBLE WORKFLOW</p>
+          <h2>مسیر بازتولیدپذیر تحلیل</h2>
+        </div>
+      </div>
+
+      <div class="workflow">
+        <div class="flow-step done"><span>01</span><b>Input</b><small>ورود داده</small></div>
+        <div class="flow-connector"></div>
+        <div class="flow-step done"><span>02</span><b>Audit</b><small>کنترل کیفیت</small></div>
+        <div class="flow-connector"></div>
+        <div class="flow-step done"><span>03</span><b>Prepare</b><small>آماده‌سازی</small></div>
+        <div class="flow-connector"></div>
+        <div class="flow-step current"><span>04</span><b>Specify</b><small>تعریف مدل</small></div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span>05</span><b>Estimate</b><small>برآورد</small></div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span>06</span><b>Report</b><small>گزارش نهایی</small></div>
+      </div>
+    </section>
+
+    <section class="section-grid final-row">
+      <article class="panel span-7">
+        <div class="section-head">
+          <div>
+            <p class="kicker">RESEARCH INTEGRITY</p>
+            <h2>کنترل اعتبار نتایج</h2>
+          </div>
+        </div>
+        <p class="body-copy">
+          تا قبل از ورود داده واقعی و مشخص شدن مدل استاد، هیچ ضریب، سطح معناداری،
+          آزمون یا نتیجه تفسیری به عنوان یافته پژوهش نمایش داده نمی‌شود.
+        </p>
+      </article>
+
+      <article class="panel span-5 technical">
+        <div class="section-head">
+          <div>
+            <p class="kicker">STACK</p>
+            <h2>زیرساخت اجرا</h2>
+          </div>
+        </div>
+        <div class="chips">
+          <span>Python</span><span>pandas</span><span>statsmodels</span>
+          <span>linearmodels</span><span>Jupyter</span><span>GitHub Actions</span>
+        </div>
+      </article>
     </section>
   </main>
 
   <footer>
-    <span>Digital Economy × TFP Research</span>
-    <span id="buildStamp"></span>
+    <span>Digital Economy × TFP Research Portal</span>
+    <span id="buildStamp">...</span>
   </footer>
 
   <script src="./app.js"></script>
