@@ -864,33 +864,44 @@ register(
 )
 
 
+def _oecd_csv_request(path: str, params: dict) -> pd.DataFrame:
+    """Try both current versioned and legacy OECD SDMX routes without retry-amplifying server 500s."""
+    errors = []
+    for prefix in (
+        "https://sdmx.oecd.org/public/rest/v1/data/",
+        "https://sdmx.oecd.org/public/rest/data/",
+    ):
+        try:
+            r = requests.get(prefix + path, params=params, timeout=35)
+            r.raise_for_status()
+            if not r.text.strip():
+                raise ValueError("empty response")
+            return pd.read_csv(io.StringIO(r.text), low_memory=False)
+        except Exception as exc:
+            errors.append(f"{prefix}: {exc}")
+    raise RuntimeError(" | ".join(errors))
+
+
 def collect_oecd(writer) -> None:
     print("\n--- OECD ---")
+    path = "OECD.SDD.STES,DSD_STES@DF_CLI/.M.LI...AA...H"
     try:
-        url = (
-            "https://sdmx.oecd.org/public/rest/data/"
-            "OECD.SDD.STES,DSD_STES@DF_CLI/.M.LI...AA...H"
+        df = _oecd_csv_request(
+            path,
+            {"dimensionAtObservation": "AllDimensions", "format": "csvfilewithlabels"},
         )
-        r = SESSION.get(
-            url,
-            params={
-                "dimensionAtObservation": "AllDimensions",
-                "format": "csvfilewithlabels",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        df = pd.read_csv(io.StringIO(r.text))
         write_sheet(writer, df, "OECD_Composite_Leading_Indicator", "OECD")
     except Exception as exc:
-        log("OECD_Composite_Leading_Indicator", "OECD", "ERROR", str(exc))
+        # The U.S. CLI is already preserved independently from FRED, so a temporary
+        # OECD dissemination outage does not erase the business-cycle control.
+        log("OECD_Composite_Leading_Indicator", "OECD", "NOT_AVAILABLE", f"OECD endpoint unavailable in this run; FRED US CLI retained. {exc}")
 
 
 register(
     "OECD_ICT_Business_Digitalization",
     "OECD ICT Access and Usage by Businesses",
     "OECD.STI.DEP:DSD_ICT_B@DF_BUSINESSES(1.0)",
-    "OECD/accession/key-partner economies",
+    "OECD economies",
     "Annual",
     "cross-country business digitalization and AI adoption",
     "Measures: G14_B AI use, B1_B website, G13_B IoT, A3E_B broadband speed; enterprises with 10+ employees.",
@@ -899,26 +910,50 @@ register(
 
 def collect_oecd_ict_business(writer) -> None:
     print("\n--- OECD ICT business digitalization ---")
-    url = (
-        "https://sdmx.oecd.org/public/rest/data/"
-        "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
-        ".A.G14_B+B1_B+G13_B+A3E_B.PT_ENT._T.S_GE10"
-    )
-    try:
-        r = SESSION.get(
-            url,
-            params={
-                "startPeriod": "2012",
-                "dimensionAtObservation": "AllDimensions",
-                "format": "csvfilewithlabels",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        df = pd.read_csv(io.StringIO(r.text), low_memory=False)
+    areas = [
+        "AUS","AUT","BEL","CAN","CHL","COL","CRI","CZE","DNK","EST",
+        "FIN","FRA","DEU","GRC","HUN","ISL","IRL","ISR","ITA","JPN",
+        "KOR","LVA","LTU","LUX","MEX","NLD","NZL","NOR","POL","PRT",
+        "SVK","SVN","ESP","SWE","CHE","TUR","GBR","USA",
+    ]
+    measures = ["G14_B", "B1_B", "G13_B", "A3E_B"]
+    frames = []
+    failures = []
+    # Smaller country batches make the endpoint much less likely to fail with 500.
+    for measure in measures:
+        for start in range(0, len(areas), 10):
+            area_key = "+".join(areas[start:start + 10])
+            path = (
+                "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
+                f"{area_key}.A.{measure}.PT_ENT._T.S_GE10"
+            )
+            try:
+                part = _oecd_csv_request(
+                    path,
+                    {
+                        "startPeriod": "2012",
+                        "dimensionAtObservation": "AllDimensions",
+                        "format": "csvfilewithlabels",
+                    },
+                )
+                if not part.empty:
+                    frames.append(part)
+            except Exception as exc:
+                failures.append(f"{measure}/{area_key}: {exc}")
+    if frames:
+        df = pd.concat(frames, ignore_index=True).drop_duplicates()
         write_sheet(writer, df, "OECD_ICT_Business_Digital", "OECD ICT Access and Usage by Businesses")
-    except Exception as exc:
-        log("OECD_ICT_Business_Digital", "OECD ICT", "ERROR", str(exc))
+        detail = f"{len(df)} rows from {len(frames)} successful batches"
+        if failures:
+            detail += f"; {len(failures)} batches unavailable"
+        log("OECD ICT business panel batch audit", "OECD ICT", "OK", detail, len(df))
+    else:
+        log(
+            "OECD_ICT_Business_Digital",
+            "OECD ICT",
+            "NOT_AVAILABLE",
+            "OECD dissemination endpoints returned no successful batch in this run; dataset route remains documented.",
+        )
 
 
 register(
@@ -1104,6 +1139,31 @@ def collect_imf_iran_current_statistics(writer) -> None:
                     "retrieved_at": RETRIEVED_AT,
                 })
         if not valid.empty:
+            for indicator, grp in valid.groupby("INDICATOR", dropna=False) if "INDICATOR" in valid.columns else [("industrial_production", valid)]:
+                periods = grp["TIME_PERIOD"].astype(str).dropna().sort_values()
+                freq = str(grp["FREQ"].dropna().iloc[0]) if "FREQ" in grp.columns and not grp["FREQ"].dropna().empty else "as returned"
+                _coverage_rows.append({
+                    "variable_id": str(indicator),
+                    "variable_name": "Iran industrial production index",
+                    "country_iso3": "IRN",
+                    "entity_type": "country",
+                    "source": f"IMF SDMX {pi_source}",
+                    "series_id": str(indicator),
+                    "frequency": freq,
+                    "first_valid_period": periods.iloc[0] if not periods.empty else None,
+                    "last_valid_period": periods.iloc[-1] if not periods.empty else None,
+                    "valid_observations": int(len(grp)),
+                    "expected_periods": None,
+                    "missing_periods": None,
+                    "coverage_percent": None,
+                    "longest_contiguous_start": None,
+                    "longest_contiguous_end": None,
+                    "observation_status": "official IMF Production Indexes observations",
+                    "comparability_status": "IMF PI definition; frequency and seasonal adjustment retained in source columns",
+                    "availability_status": "available",
+                    "notes": "Iran numeric production-index observations recovered from the current IMF dataset.",
+                    "retrieved_at": RETRIEVED_AT,
+                })
             log("Iran industrial production numeric series", "IMF SDMX", "OK", f"{len(valid)} numeric rows", len(valid))
         else:
             log("Iran industrial production numeric series", "IMF SDMX", "NOT_AVAILABLE", "No numeric OBS_VALUE/TIME_PERIOD rows returned")
@@ -1788,7 +1848,7 @@ IRAN_MONETARY_POLICY_CANDIDATES = [
 RESEARCH_REQUIREMENTS = [
     ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; WDI NY.GDP.MKTP.KD","US + Iran + cross-country WDI level collected","available"],
     ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
-    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US and broad cross-country sources collected; current IMF SDMX Iran extraction is attempted and recorded separately","source-dependent; Iran numeric availability audited"],
+    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US and broad cross-country sources collected; IMF Production Indexes returned numeric Iran observations in the audited run and the collector records them in Iran Data/Coverage","available; Iran IMF PI recovered"],
     ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
     ["BC05","Business cycle","Nonfarm payroll employment","US labor control","FRED PAYEMS / BLS CES0000000001","US collected; not an Iran series","available US-only"],
     ["BC06","Business cycle","Recession indicator/dating","Regime variable","FRED USREC / NBER","US collected; not an Iran series","available US-only"],
@@ -2066,6 +2126,7 @@ def main() -> None:
                         "Labor_Productivity": "SL.GDP.PCAP.EM.KD",
                         "Employment_Ratio": "SL.EMP.TOTL.SP.ZS",
                         "Industrial_Production_GEM": "IPTOTSAKD",
+                        "Industrial_Production_IMF": "AIP_IX",
                         "AI_Patents": "patents_yearly_applications.csv",
                     }
                     investment_ids = {
