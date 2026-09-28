@@ -269,6 +269,8 @@ def collect_fred(writer) -> None:
 
 WORLDBANK_INDICATORS = {
     "WB_Real_GDP_Level": "NY.GDP.MKTP.KD",
+    "WB_Labor_Productivity": "SL.GDP.PCAP.EM.KD",
+    "WB_Total_Employment": "SL.EMP.TOTL",
     "WB_Internet_Users_Percent": "IT.NET.USER.ZS",
     "WB_Fixed_Broadband_Per_100": "IT.NET.BBND.P2",
     "WB_R_and_D_Percent_GDP": "GB.XPD.RSDV.GD.ZS",
@@ -1055,6 +1057,51 @@ def collect_worldbank_dai(writer) -> None:
                 continue
             write_sheet(writer, df, f"DAI_{sheet_name}", "World Bank DAI")
             wrote += len(df)
+
+            # The official DAI workbook is a sparse 2014/2016 cross-section.
+            # Preserve Iran explicitly without fabricating annual observations.
+            lower_cols = {str(col).strip().lower(): col for col in df.columns}
+            country_col = lower_cols.get("country")
+            year_col = lower_cols.get("year")
+            dai_col = lower_cols.get("digital adoption index")
+            if country_col and year_col and dai_col:
+                iran_mask = df[country_col].astype(str).str.strip().str.startswith("Iran")
+                iran_part = df[iran_mask].copy()
+                valid_iran = iran_part[pd.to_numeric(iran_part[dai_col], errors="coerce").notna()].copy()
+                for _, row in valid_iran.iterrows():
+                    _iran_rows.append({
+                        "source": "World Bank DAI",
+                        "series_id": "DAI",
+                        "country_iso3": "IRN",
+                        "period": row.get(year_col),
+                        "value": row.get(dai_col),
+                        "observation_status": "official sparse cross-section",
+                        "retrieved_at": RETRIEVED_AT,
+                    })
+                if not valid_iran.empty:
+                    years = sorted(pd.to_numeric(valid_iran[year_col], errors="coerce").dropna().astype(int).unique().tolist())
+                    _coverage_rows.append({
+                        "variable_id": "DAI",
+                        "variable_name": "World Bank Digital Adoption Index",
+                        "country_iso3": "IRN",
+                        "entity_type": "country",
+                        "source": "World Bank DAI",
+                        "series_id": "DAI",
+                        "frequency": "sparse cross-section",
+                        "first_valid_period": min(years),
+                        "last_valid_period": max(years),
+                        "valid_observations": len(years),
+                        "expected_periods": 2,
+                        "missing_periods": max(2 - len(years), 0),
+                        "coverage_percent": len(years) / 2,
+                        "longest_contiguous_start": None,
+                        "longest_contiguous_end": None,
+                        "observation_status": "official 2014/2016 observations",
+                        "comparability_status": "official DAI values; not an annual panel",
+                        "availability_status": "available",
+                        "notes": "Do not interpolate the missing calendar year between official DAI waves.",
+                        "retrieved_at": RETRIEVED_AT,
+                    })
         if wrote:
             log("Digital Adoption Index workbook", "World Bank DAI", "OK", f"{wrote} rows across {len(sheets)} source sheets", wrote)
         else:
@@ -1102,7 +1149,7 @@ MANUAL_SOURCES = [
     {
         "Variable": "World Bank – Digital Adoption Index",
         "URL": "https://www.worldbank.org/en/publication/wdr2016/Digital-Adoption-Index",
-        "Status": "official 2014/2016 workbook collected when the current World Bank download is reachable",
+        "Status": "official 2014/2016 workbook collected",
         "Note": "Sparse cross-section (2014 and 2016), not an annual panel; do not interpolate into fake yearly observations.",
     },
     {
@@ -1151,7 +1198,7 @@ RESEARCH_REQUIREMENTS = [
     ["DE03","Digital economy","High-technology exports (% manufactured exports)","Digital trade/intensity","WDI TX.VAL.TECH.MF.ZS","Iran + cross-country collected","available"],
     ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
     ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran equivalent not yet found","partial"],
-    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI 2014/2016 workbook collected when current download succeeds; OECD Going Digital remains a supplementary route","partial; DAI is sparse cross-section"],
+    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI 2014/2016 workbook collected, including Iran; OECD Going Digital remains a supplementary route","partial; DAI is sparse cross-section"],
     ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO disclosed + estimated annual country data collected with completeness flags","available from CSET/ETO; other source variants optional"],
     ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO annual country/field patent applications collected; completeness flags retained","available from CSET/ETO"],
     ["AI03","AI-specific","Frontier-model training compute","Physical AI-capital proxy","Epoch AI","Frontier + notable model raw data collected","available model-level"],
@@ -1160,7 +1207,7 @@ RESEARCH_REQUIREMENTS = [
     ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","Official national and AI-question workbooks collected","available US-only"],
     ["LB01","Labor/structure","Information/high-tech industry employment","Structural labor measure","FRED USINFO; BLS CES6054150001","US collected","available US-only"],
     ["LB02","Labor/structure","Occupational/industry/geographic AI exposure","H2 exposure variable","AIOE/AIIE/AIGE","base + generative-language + image exposure workbooks collected","available exposure data"],
-    ["LB03","Labor/structure","Labor productivity","H1 outcome","FRED OPHNFB","US collected","available US-only"],
+    ["LB03","Labor/structure","Labor productivity","H1 outcome","FRED OPHNFB; WDI SL.GDP.PCAP.EM.KD","US + Iran + cross-country annual productivity collected","available"],
     ["LB04","Labor/structure","Total factor productivity","H1 outcome","FRED MFPPBS","US collected","available US-only"],
     ["LB05","Labor/structure","Unit labor costs","Cost/price mechanism","FRED ULCNFB","US collected","available US-only"],
     ["LB06","Labor/structure","Job openings","Matching efficiency","FRED JTSJOL / JTS540099JOL","US collected","available US-only"],
@@ -1179,8 +1226,8 @@ RESEARCH_REQUIREMENTS = [
 ]
 
 HYPOTHESIS_DATA_MATRIX = [
-    ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US raw capex/productivity/TFP collected","partial","Cross-country capex/productivity equivalents still needed; no estimation authorized"],
-    ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE raw exposure collected","partial","Compatible historical employment/output crosswalk still needed"],
+    ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US capex/productivity/TFP + WDI country labor productivity + CSET country AI investment collected","partial","Country-year overlap and the final digital/AI-capex definition must be audited; no estimation authorized"],
+    ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + country total-employment/output series collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
     ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Aggregate prices collected","missing","Sector universe, sectoral price data and digital-intensity mapping still missing"],
     ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","partial","Return construction, final asset universe and frequency are still to be specified"],
     ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
