@@ -19,6 +19,7 @@ This script collects and audits data only. It does not run econometric models.
 
 from __future__ import annotations
 
+import csv
 import io
 import os
 import re
@@ -489,7 +490,22 @@ def _collect_bea_nipa_public_download(writer) -> bool:
             if not r.content:
                 raise ValueError("empty response")
             if kind == "csv":
-                df = pd.read_csv(io.BytesIO(r.content), low_memory=False)
+                try:
+                    df = pd.read_csv(io.BytesIO(r.content), low_memory=False)
+                except Exception:
+                    # BEA section flat files include title/metadata rows whose
+                    # field counts differ from the tabular rows. csv.reader
+                    # preserves the official rows without dropping that context.
+                    text_data = r.content.decode("utf-8-sig", errors="replace")
+                    rows = list(csv.reader(io.StringIO(text_data)))
+                    if not rows:
+                        raise ValueError("CSV response contained no rows")
+                    width = max(len(row) for row in rows)
+                    padded = [row + [""] * (width - len(row)) for row in rows]
+                    df = pd.DataFrame(
+                        padded,
+                        columns=[f"Field_{i+1}" for i in range(width)],
+                    )
                 write_sheet(writer, df, label, "BEA NIPA public download")
                 log("BEA NIPA public-download route", "BEA", "OK", url)
                 return True
