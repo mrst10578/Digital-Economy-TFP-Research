@@ -1096,14 +1096,14 @@ MANUAL_SOURCES = [
     {
         "Variable": "Census BTOS – AI use by businesses",
         "URL": "https://www.census.gov/programs-surveys/btos.html",
-        "Status": "data acquisition still required",
-        "Note": "Biweekly AI-use supplement; preserve question/version, sector, geography and sample metadata.",
+        "Status": "official national and AI-question workbooks collected",
+        "Note": "Raw BTOS workbooks are included; preserve question/version, sector, geography and sample metadata in any later modeling.",
     },
     {
         "Variable": "World Bank – Digital Adoption Index",
         "URL": "https://www.worldbank.org/en/publication/wdr2016/Digital-Adoption-Index",
-        "Status": "data acquisition still required",
-        "Note": "Sparse cross-section (not an annual panel); do not interpolate into fake yearly observations.",
+        "Status": "official 2014/2016 workbook collected when the current World Bank download is reachable",
+        "Note": "Sparse cross-section (2014 and 2016), not an annual panel; do not interpolate into fake yearly observations.",
     },
     {
         "Variable": "Stanford HAI – AI Index economy data",
@@ -1120,8 +1120,8 @@ MANUAL_SOURCES = [
     {
         "Variable": "CSET / ETO Country Activity Tracker",
         "URL": "https://cat.eto.tech/",
-        "Status": "data acquisition still required",
-        "Note": "Candidate source for AI patents/research/investment; verify exact table and lag.",
+        "Status": "AI patent and private-investment country files collected",
+        "Note": "Disclosed and estimated investment files are kept separate; preserve completeness flags and source lags.",
     },
     {
         "Variable": "AIOE / AIIE / AIGE employment matching",
@@ -1151,13 +1151,13 @@ RESEARCH_REQUIREMENTS = [
     ["DE03","Digital economy","High-technology exports (% manufactured exports)","Digital trade/intensity","WDI TX.VAL.TECH.MF.ZS","Iran + cross-country collected","available"],
     ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
     ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran equivalent not yet found","partial"],
-    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI official workbook requested in this run; OECD Going Digital route documented","partial; see Source Log"],
+    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI 2014/2016 workbook collected when current download succeeds; OECD Going Digital remains a supplementary route","partial; DAI is sparse cross-section"],
     ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO disclosed + estimated annual country data collected with completeness flags","available from CSET/ETO; other source variants optional"],
     ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO annual country/field patent applications collected; completeness flags retained","available from CSET/ETO"],
     ["AI03","AI-specific","Frontier-model training compute","Physical AI-capital proxy","Epoch AI","Frontier + notable model raw data collected","available model-level"],
     ["AI04","AI-specific","AI venture capital/private-market investment","AI investment proxy","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO private-market disclosed/estimated investment collected","available from CSET/ETO"],
     ["AI05","AI-specific","Information-processing equipment & software investment","Long-run digital-capex proxy","FRED A679RC1Q027SBEA","US collected","available US-only"],
-    ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","Official national and AI-question workbooks requested directly from Census in this run","partial; see Source Log"],
+    ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","Official national and AI-question workbooks collected","available US-only"],
     ["LB01","Labor/structure","Information/high-tech industry employment","Structural labor measure","FRED USINFO; BLS CES6054150001","US collected","available US-only"],
     ["LB02","Labor/structure","Occupational/industry/geographic AI exposure","H2 exposure variable","AIOE/AIIE/AIGE","base + generative-language + image exposure workbooks collected","available exposure data"],
     ["LB03","Labor/structure","Labor productivity","H1 outcome","FRED OPHNFB","US collected","available US-only"],
@@ -1224,7 +1224,7 @@ def format_client_workbook(writer) -> None:
     ws["A7"] = "Research stage"
     ws["B7"] = "This file is a data delivery and coverage workbook. It does not contain econometric estimates."
     ws["A9"] = "Useful sheets"
-    ws["B9"] = "Iran Data; Iran Coverage; Coverage; Variable Index; Research Questions; Data Dictionary; Source Log; Method Notes"
+    ws["B9"] = "Iran Data; Iran Coverage; Coverage; Variable Index; Research Questions; Data Dictionary; Source Follow-up; Source Log; Method Notes"
     ws["A11"] = "Source note"
     ws["B11"] = "Source URLs and series identifiers are retained in the data dictionary and source-specific sheets."
     ws.column_dimensions["A"].width = 22
@@ -1239,7 +1239,7 @@ def format_client_workbook(writer) -> None:
     rename_map = {
         "Requirements Matrix": "Variable Index",
         "Hypothesis Matrix": "Research Questions",
-        "Manual Sources": "Pending Data",
+        "Manual Sources": "Source Follow-up",
         "Variable Dictionary": "Data Dictionary",
         "Collection Status": "Source Log",
         "Audit Notes": "Method Notes",
