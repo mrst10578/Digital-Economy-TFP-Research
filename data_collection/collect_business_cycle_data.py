@@ -884,17 +884,21 @@ def _oecd_csv_request(path: str, params: dict) -> pd.DataFrame:
 
 def collect_oecd(writer) -> None:
     print("\n--- OECD ---")
-    path = "OECD.SDD.STES,DSD_STES@DF_CLI/.M.LI...AA...H"
+    # The required U.S. CLI is already collected from FRED as
+    # USALOLITONOSTSAM. Reuse that stable official mirror rather than making
+    # the workbook depend on a second intermittently unstable endpoint.
     try:
-        df = _oecd_csv_request(
-            path,
-            {"dimensionAtObservation": "AllDimensions", "format": "csvfilewithlabels"},
+        df = fetch_fred_series("USALOLITONOSTSAM")
+        write_sheet(writer, df, "OECD_Composite_Leading_Indicator", "OECD CLI via FRED mirror")
+        log(
+            "OECD_Composite_Leading_Indicator",
+            "OECD/FRED",
+            "OK",
+            "U.S. OECD CLI retained through FRED series USALOLITONOSTSAM.",
+            len(df),
         )
-        write_sheet(writer, df, "OECD_Composite_Leading_Indicator", "OECD")
     except Exception as exc:
-        # The U.S. CLI is already preserved independently from FRED, so a temporary
-        # OECD dissemination outage does not erase the business-cycle control.
-        log("OECD_Composite_Leading_Indicator", "OECD", "NOT_AVAILABLE", f"OECD endpoint unavailable in this run; FRED US CLI retained. {exc}")
+        log("OECD_Composite_Leading_Indicator", "OECD/FRED", "ERROR", str(exc))
 
 
 register(
@@ -910,49 +914,55 @@ register(
 
 def collect_oecd_ict_business(writer) -> None:
     print("\n--- OECD ICT business digitalization ---")
-    areas = [
-        "AUS","AUT","BEL","CAN","CHL","COL","CRI","CZE","DNK","EST",
-        "FIN","FRA","DEU","GRC","HUN","ISL","IRL","ISR","ITA","JPN",
-        "KOR","LVA","LTU","LUX","MEX","NLD","NZL","NOR","POL","PRT",
-        "SVK","SVN","ESP","SWE","CHE","TUR","GBR","USA",
+    # G14_B is the AI-use measure that materially extends AI06. Keep this
+    # request bounded so an upstream OECD outage cannot stall the entire build.
+    area_batches = [
+        ["AUS","AUT","BEL","CAN","CHE","CHL","COL","CRI","CZE","DEU"],
+        ["DNK","ESP","EST","FIN","FRA","GBR","GRC","HUN","IRL","ISL"],
+        ["ISR","ITA","JPN","KOR","LTU","LUX","LVA","MEX","NLD","NOR"],
+        ["NZL","POL","PRT","SVK","SVN","SWE","TUR","USA"],
     ]
-    measures = ["G14_B", "B1_B", "G13_B", "A3E_B"]
     frames = []
     failures = []
-    # Smaller country batches make the endpoint much less likely to fail with 500.
-    for measure in measures:
-        for start in range(0, len(areas), 10):
-            area_key = "+".join(areas[start:start + 10])
-            path = (
-                "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
-                f"{area_key}.A.{measure}.PT_ENT._T.S_GE10"
+    for areas in area_batches:
+        area_key = "+".join(areas)
+        url = (
+            "https://sdmx.oecd.org/public/rest/data/"
+            "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
+            f"{area_key}.A.G14_B.PT_ENT._T.S_GE10"
+        )
+        try:
+            r = requests.get(
+                url,
+                params={
+                    "startPeriod": "2020",
+                    "dimensionAtObservation": "AllDimensions",
+                },
+                headers={"Accept": "text/csv"},
+                timeout=15,
             )
-            try:
-                part = _oecd_csv_request(
-                    path,
-                    {
-                        "startPeriod": "2012",
-                        "dimensionAtObservation": "AllDimensions",
-                        "format": "csvfilewithlabels",
-                    },
-                )
-                if not part.empty:
-                    frames.append(part)
-            except Exception as exc:
-                failures.append(f"{measure}/{area_key}: {exc}")
+            r.raise_for_status()
+            part = pd.read_csv(io.StringIO(r.text), low_memory=False)
+            if not part.empty:
+                frames.append(part)
+        except Exception as exc:
+            failures.append(f"{area_key}: {exc}")
     if frames:
         df = pd.concat(frames, ignore_index=True).drop_duplicates()
         write_sheet(writer, df, "OECD_ICT_Business_Digital", "OECD ICT Access and Usage by Businesses")
-        detail = f"{len(df)} rows from {len(frames)} successful batches"
-        if failures:
-            detail += f"; {len(failures)} batches unavailable"
-        log("OECD ICT business panel batch audit", "OECD ICT", "OK", detail, len(df))
+        log(
+            "OECD ICT business AI-adoption panel",
+            "OECD ICT",
+            "OK",
+            f"{len(df)} rows from {len(frames)} successful country batches; {len(failures)} failed batches.",
+            len(df),
+        )
     else:
         log(
             "OECD_ICT_Business_Digital",
             "OECD ICT",
             "NOT_AVAILABLE",
-            "OECD dissemination endpoints returned no successful batch in this run; dataset route remains documented.",
+            "No OECD AI-adoption batch returned in this run; BTOS and World Bank DAI remain available and the OECD route is documented.",
         )
 
 
