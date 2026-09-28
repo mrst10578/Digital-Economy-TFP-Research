@@ -347,6 +347,23 @@ def fetch_worldbank_indicator(code: str, entity_meta: dict[str, dict]) -> pd.Dat
     return df
 
 
+def longest_contiguous_annual_span(years) -> tuple[int | None, int | None]:
+    vals = sorted({int(y) for y in years if pd.notna(y)})
+    if not vals:
+        return None, None
+    best_start = best_end = cur_start = cur_end = vals[0]
+    for y in vals[1:]:
+        if y == cur_end + 1:
+            cur_end = y
+        else:
+            if (cur_end - cur_start) > (best_end - best_start):
+                best_start, best_end = cur_start, cur_end
+            cur_start = cur_end = y
+    if (cur_end - cur_start) > (best_end - best_start):
+        best_start, best_end = cur_start, cur_end
+    return best_start, best_end
+
+
 def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
     if df.empty:
         return
@@ -368,7 +385,10 @@ def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
                 "expected_periods": None,
                 "missing_periods": None,
                 "coverage_percent": None,
+                "longest_contiguous_start": None,
+                "longest_contiguous_end": None,
                 "observation_status": "no numeric value returned",
+                "comparability_status": "same WDI indicator; no numeric observation for this entity in returned data",
                 "availability_status": "missing in returned source data",
                 "notes": "",
                 "retrieved_at": RETRIEVED_AT,
@@ -380,6 +400,7 @@ def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
         expected = last - first + 1
         valid_count = int(years.nunique())
         missing = max(expected - valid_count, 0)
+        contiguous_start, contiguous_end = longest_contiguous_annual_span(years.tolist())
         _coverage_rows.append({
             "variable_id": code,
             "variable_name": name,
@@ -394,7 +415,10 @@ def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
             "expected_periods": expected,
             "missing_periods": missing,
             "coverage_percent": valid_count / expected if expected else None,
+            "longest_contiguous_start": contiguous_start,
+            "longest_contiguous_end": contiguous_end,
             "observation_status": "observed source values",
+            "comparability_status": "same WDI indicator; source/methodology revisions may still require review",
             "availability_status": "available",
             "notes": "Coverage is based on numeric values, not merely first/last rows.",
             "retrieved_at": RETRIEVED_AT,
@@ -600,7 +624,10 @@ def add_imf_coverage(df: pd.DataFrame, name: str, code: str) -> None:
             "expected_periods": None,
             "missing_periods": None,
             "coverage_percent": None,
+            "longest_contiguous_start": None,
+            "longest_contiguous_end": None,
             "observation_status": "returned periods; actual/estimate/forecast status not retained",
+            "comparability_status": "IMF WEO returned periods include future values; observed/estimate/forecast split unresolved",
             "availability_status": "available but observed endpoint unresolved",
             "notes": f"Returned through {returned_last}; do not treat returned endpoint as last observed year.",
             "retrieved_at": RETRIEVED_AT,
@@ -828,6 +855,74 @@ def _zenodo_file_url(file_meta: dict) -> str:
     return links.get("content") or links.get("self") or links.get("download") or ""
 
 
+def add_cset_country_coverage(
+    df: pd.DataFrame,
+    variable_name: str,
+    series_id: str,
+    value_col: str,
+) -> None:
+    if df.empty or "country" not in df.columns or "year" not in df.columns:
+        return
+    work = df.copy()
+    work["year"] = pd.to_numeric(work["year"], errors="coerce")
+    work[value_col] = pd.to_numeric(work[value_col], errors="coerce")
+    for country, group in work.groupby("country", dropna=False):
+        valid = group[group[value_col].notna() & group["year"].notna()].copy()
+        if valid.empty:
+            continue
+        years = sorted(valid["year"].astype(int).unique().tolist())
+        first = years[0]
+        last = years[-1]
+        expected = last - first + 1
+        valid_years = len(years)
+        missing = max(expected - valid_years, 0)
+        cont_start, cont_end = longest_contiguous_annual_span(years)
+        complete_rows = None
+        if "complete" in valid.columns:
+            complete_rows = int(valid["complete"].fillna(False).astype(bool).sum())
+        note = (
+            f"Field-disaggregated source. Coverage counts unique years with any returned row; "
+            f"do not sum fields without reviewing overlap. Complete-flagged rows: {complete_rows}."
+        )
+        _coverage_rows.append({
+            "variable_id": series_id,
+            "variable_name": variable_name,
+            "country_iso3": country,
+            "entity_type": "country_or_group_as_named_by_CSET",
+            "source": "CSET / ETO Country AI Activity Metrics",
+            "series_id": series_id,
+            "frequency": "annual",
+            "first_valid_period": first,
+            "last_valid_period": last,
+            "valid_observations": valid_years,
+            "expected_periods": expected,
+            "missing_periods": missing,
+            "coverage_percent": valid_years / expected if expected else None,
+            "longest_contiguous_start": cont_start,
+            "longest_contiguous_end": cont_end,
+            "observation_status": "source rows; retain complete flag for material completeness",
+            "comparability_status": "field-disaggregated CSET/ETO definitions; recent patent years may be incomplete",
+            "availability_status": "available",
+            "notes": note,
+            "retrieved_at": RETRIEVED_AT,
+        })
+
+    iran = work[work["country"].astype(str) == "Iran"].copy()
+    for _, row in iran.iterrows():
+        _iran_rows.append({
+            "source": "CSET / ETO Country AI Activity Metrics",
+            "series_id": series_id,
+            "country_iso3": "IRN",
+            "period": row.get("year"),
+            "value": row.get(value_col),
+            "field": row.get("field"),
+            "observation_status": (
+                "source row; complete=" + str(row.get("complete"))
+            ),
+            "retrieved_at": RETRIEVED_AT,
+        })
+
+
 def collect_cset_eto(writer) -> None:
     print("\n--- CSET / ETO Country AI Activity ---")
     try:
@@ -866,6 +961,12 @@ def collect_cset_eto(writer) -> None:
                     r.raise_for_status()
                     df = pd.read_csv(io.BytesIO(r.content))
                     write_sheet(writer, df, name, "CSET / ETO")
+                    value_col = {
+                        "patents_yearly_applications.csv": "num_patent_applications",
+                        "companies_yearly_disclosed.csv": "disclosed_investment",
+                        "companies_yearly_estimated.csv": "estimated_investment",
+                    }[base]
+                    add_cset_country_coverage(df, name, base, value_col)
                     found.add(base)
                 except Exception as exc:
                     log(name, "CSET / ETO", "ERROR", str(exc))
@@ -887,6 +988,12 @@ def collect_cset_eto(writer) -> None:
                             with zf.open(match) as fh:
                                 df = pd.read_csv(fh)
                             write_sheet(writer, df, name, "CSET / ETO")
+                            value_col = {
+                                "patents_yearly_applications.csv": "num_patent_applications",
+                                "companies_yearly_disclosed.csv": "disclosed_investment",
+                                "companies_yearly_estimated.csv": "estimated_investment",
+                            }[target_file]
+                            add_cset_country_coverage(df, name, target_file, value_col)
                             found.add(target_file)
                 except Exception as exc:
                     log(f"CSET archive {key}", "CSET / ETO", "ERROR", str(exc))
@@ -968,10 +1075,10 @@ RESEARCH_REQUIREMENTS = [
     ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
     ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran equivalent not yet found","partial"],
     ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","sources verified; exact raw tables not yet automated","missing raw data"],
-    ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO collection attempted in current run; see Collection Status","source-dependent"],
-    ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO collection attempted in current run; preserve completeness flags","source-dependent"],
+    ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO disclosed + estimated annual country data collected with completeness flags","available from CSET/ETO; other source variants optional"],
+    ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO annual country/field patent applications collected; completeness flags retained","available from CSET/ETO"],
     ["AI03","AI-specific","Frontier-model training compute","Physical AI-capital proxy","Epoch AI","Frontier + notable model raw data collected","available model-level"],
-    ["AI04","AI-specific","AI venture capital/private-market investment","AI investment proxy","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO collection attempted in current run","source-dependent"],
+    ["AI04","AI-specific","AI venture capital/private-market investment","AI investment proxy","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO private-market disclosed/estimated investment collected","available from CSET/ETO"],
     ["AI05","AI-specific","Information-processing equipment & software investment","Long-run digital-capex proxy","FRED A679RC1Q027SBEA","US collected","available US-only"],
     ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","official download verified; exact raw AI supplement file not yet automated","missing raw data"],
     ["LB01","Labor/structure","Information/high-tech industry employment","Structural labor measure","FRED USINFO; BLS CES6054150001","US collected","available US-only"],
