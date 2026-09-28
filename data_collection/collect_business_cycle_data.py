@@ -651,88 +651,39 @@ BEA_TABLES = {
 register("BEA_RealGDP_PercentChange_T10101", "BEA NIPA", "T10101", "US", "Quarterly", "supporting U.S. GDP data")
 
 
+def _read_bea_section_file(url: str) -> pd.DataFrame:
+    r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    if not r.content:
+        raise ValueError("empty response")
+    try:
+        return pd.read_csv(io.BytesIO(r.content), low_memory=False)
+    except Exception:
+        text_data = r.content.decode("utf-8-sig", errors="replace")
+        rows = list(csv.reader(io.StringIO(text_data)))
+        if not rows:
+            raise ValueError("CSV response contained no rows")
+        width = max(len(row) for row in rows)
+        padded = [row + [""] * (width - len(row)) for row in rows]
+        return pd.DataFrame(padded, columns=[f"Field_{i+1}" for i in range(width)])
+
+
 def _collect_bea_nipa_public_download(writer) -> bool:
-    """Use BEA's public NIPA flat-file downloads when no API key is configured."""
-    candidates = [
-        ("BEA_NIPA_Section1", "https://apps.bea.gov/national/Release/TXT/Section1All_csv.csv", "csv"),
-        ("BEA_NIPA_Section1", "https://apps.bea.gov/national/Release/XLS/Section1All_xls.xlsx", "xlsx"),
-        ("BEA_NIPA_Annual_Bulk", "https://apps.bea.gov/national/Release/TXT/NipaDataA.zip", "zip"),
-        ("BEA_NIPA_Quarterly_Bulk", "https://apps.bea.gov/national/Release/TXT/NipaDataQ.zip", "zip"),
-    ]
-    errors = []
-    for label, url, kind in candidates:
+    """Collect the BEA NIPA sections needed for GDP and investment analysis without an API key."""
+    targets = {
+        "BEA_NIPA_Section1": "https://apps.bea.gov/national/Release/TXT/Section1All_csv.csv",
+        "BEA_NIPA_Section5": "https://apps.bea.gov/national/Release/TXT/Section5All_csv.csv",
+    }
+    success = 0
+    for label, url in targets.items():
         try:
-            r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
-            r.raise_for_status()
-            if not r.content:
-                raise ValueError("empty response")
-            if kind == "csv":
-                try:
-                    df = pd.read_csv(io.BytesIO(r.content), low_memory=False)
-                except Exception:
-                    # BEA section flat files include title/metadata rows whose
-                    # field counts differ from the tabular rows. csv.reader
-                    # preserves the official rows without dropping that context.
-                    text_data = r.content.decode("utf-8-sig", errors="replace")
-                    rows = list(csv.reader(io.StringIO(text_data)))
-                    if not rows:
-                        raise ValueError("CSV response contained no rows")
-                    width = max(len(row) for row in rows)
-                    padded = [row + [""] * (width - len(row)) for row in rows]
-                    df = pd.DataFrame(
-                        padded,
-                        columns=[f"Field_{i+1}" for i in range(width)],
-                    )
-                write_sheet(writer, df, label, "BEA NIPA public download")
-                log("BEA NIPA public-download route", "BEA", "OK", url)
-                return True
-            if kind == "xlsx":
-                sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
-                total = 0
-                for sheet_name, df in sheets.items():
-                    if df is None or df.empty:
-                        continue
-                    write_sheet(writer, df, f"{label}_{sheet_name}", "BEA NIPA public download")
-                    total += len(df)
-                if total:
-                    log("BEA NIPA public-download route", "BEA", "OK", f"{url} ({total} rows)")
-                    return True
-                raise ValueError("workbook contained no rows")
-            if kind == "zip":
-                with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
-                    members = [
-                        m for m in zf.namelist()
-                        if m.lower().endswith((".csv", ".txt"))
-                        and not m.endswith("/")
-                    ]
-                    if not members:
-                        raise ValueError("zip contained no CSV/TXT files")
-                    total = 0
-                    for member in members[:12]:
-                        with zf.open(member) as fh:
-                            raw = fh.read()
-                        try:
-                            df = pd.read_csv(io.BytesIO(raw), low_memory=False)
-                        except Exception:
-                            df = pd.read_csv(io.BytesIO(raw), sep="\t", low_memory=False)
-                        if df.empty:
-                            continue
-                        base = member.rsplit("/", 1)[-1].rsplit(".", 1)[0]
-                        write_sheet(writer, df, f"{label}_{base}", "BEA NIPA public download")
-                        total += len(df)
-                    if total:
-                        log("BEA NIPA public-download route", "BEA", "OK", f"{url} ({total} rows)")
-                        return True
-                    raise ValueError("zip files were readable but contained no rows")
+            df = _read_bea_section_file(url)
+            write_sheet(writer, df, label, "BEA NIPA public download")
+            log(f"{label} public-download route", "BEA", "OK", url)
+            success += 1
         except Exception as exc:
-            errors.append(f"{url}: {exc}")
-    log(
-        "All BEA NIPA tables",
-        "BEA",
-        "ERROR",
-        "Public download attempts failed: " + " | ".join(errors),
-    )
-    return False
+            log(label, "BEA", "ERROR", str(exc))
+    return success == len(targets)
 
 
 def collect_bea(writer) -> None:
