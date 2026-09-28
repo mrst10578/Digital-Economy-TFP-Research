@@ -1830,7 +1830,7 @@ HYPOTHESIS_DATA_MATRIX = [
     ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + WDI employment-to-population/output series (including Iran) collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
     ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Monthly BLS-origin PPI series, OECD digital-intensity taxonomy, and official Census NAICS-to-ISIC concordance collected","method pending","Persistence-window/autocorrelation definition remains; source inputs and classification bridge are present"],
     ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","method pending","Return construction, final asset universe and frequency are still to be specified"],
-    ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
+    ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA plus BEA NIPA Section 5 investment-component tables collected","method pending","Research document mislabels A679RZ2Q224SBEA as a total-GDP contribution; comparator components still must be selected"],
     ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates, nonresidential investment, and BEA NIPA Section 5 inputs collected","method pending","Major-event selection and the final non-AI investment exclusion rule are still to be specified"],
 ]
 
@@ -1872,7 +1872,7 @@ def write_audit_summary(writer) -> None:
 
     def classify(status: str) -> str:
         s = str(status).lower()
-        if "definition" in s or "methodology" in s or "method pending" in s or "selection rule" in s or "construction" in s:
+        if "definition" in s or "methodology" in s or "pending" in s or "selection rule" in s or "construction" in s:
             return "Methodological decision pending"
         if "source-dependent" in s or "missing" in s:
             return "Source availability / data gap"
@@ -1892,12 +1892,25 @@ def write_audit_summary(writer) -> None:
                 "Evidence_or_Note": row["Current_Evidence"],
             })
 
+    hyp_cols = ["Hypothesis","Question","Required_Data","Current_Evidence","Data_Readiness","Remaining_Gap"]
+    hyp_df = pd.DataFrame(HYPOTHESIS_DATA_MATRIX, columns=hyp_cols)
+    for _, row in hyp_df.iterrows():
+        readiness = str(row["Data_Readiness"]).lower()
+        if readiness not in {"ready", "available"}:
+            gaps.append({
+                "ID": row["Hypothesis"],
+                "Variable": row["Question"],
+                "Gap_Type": "Hypothesis integration / methodology",
+                "Current_Status": row["Data_Readiness"],
+                "Evidence_or_Note": row["Remaining_Gap"],
+            })
+
     audit_rows = [
         {"Check": "Source execution", "Result": "PASS" if hard_issues == 0 else "REVIEW", "Detail": f"ERROR/EMPTY/SKIPPED={hard_issues}; OK={status_counts.get('OK',0)}; NOT_AVAILABLE={status_counts.get('NOT_AVAILABLE',0)}"},
         {"Check": "Iran retained explicitly", "Result": "PASS" if any(str(r.get("country_iso3")) == "IRN" for r in _coverage_rows) else "REVIEW", "Detail": "Iran coverage and Iran raw rows are written separately."},
         {"Check": "Missing values", "Result": "PASS", "Detail": "No zero filling or interpolation is used."},
         {"Check": "Forecast handling", "Result": "PASS", "Detail": "Future IMF periods are retained but are not certified as observed endpoints without status metadata."},
-        {"Check": "Requirement inventory", "Result": "PASS", "Detail": f"{len(req_df)} research variables reviewed."},
+        {"Check": "Requirement inventory", "Result": "PASS", "Detail": f"{len(req_df)} research variables reviewed; unresolved items are listed separately by type."},
         {"Check": "Econometric estimation", "Result": "NOT RUN", "Detail": "No model or hypothesis estimation is included in the current delivery stage."},
     ]
     excel_safe_dataframe(pd.DataFrame(audit_rows)).to_excel(writer, sheet_name="Audit Summary", index=False)
@@ -2069,8 +2082,8 @@ def main() -> None:
                             "mandatory_iran": "YES" if str(iso3) == "IRN" else "",
                             "variables_with_data": int(group["variable_id"].nunique()),
                             "sources_with_data": int(group["source"].nunique()),
-                            "first_any_period": int(first_vals.min()) if not first_vals.empty else None,
-                            "last_any_period": int(last_vals.max()) if not last_vals.empty else None,
+                            "first_any_reported_period": int(first_vals.min()) if not first_vals.empty else None,
+                            "last_any_reported_period": int(last_vals.max()) if not last_vals.empty else None,
                         }
                         for label, variable_id in flag_ids.items():
                             row[f"has_{label}"] = "YES" if variable_id in ids else ""
