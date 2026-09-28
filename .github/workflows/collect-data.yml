@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "data_collection/**"
+      - "data_collection/collect_business_cycle_data.py"
+      - "data_collection/requirements.txt"
       - ".github/workflows/collect-data.yml"
   workflow_dispatch:
 
