@@ -23,6 +23,7 @@ import io
 import os
 import re
 import time
+import zipfile
 from datetime import datetime
 
 import pandas as pd
@@ -792,7 +793,7 @@ CSET_ETO_FILES = {
     "CSET_AI_Investment_Disclosed": "companies_yearly_disclosed.csv",
     "CSET_AI_Investment_Estimated": "companies_yearly_estimated.csv",
 }
-CSET_ETO_RECORD = "https://zenodo.org/records/22772306/files/{filename}?download=1"
+CSET_ETO_RECORD_API = "https://zenodo.org/api/records/22772306"
 register(
     "CSET_AI_Patent_Applications",
     "CSET / ETO Country AI Activity Metrics",
@@ -822,18 +823,85 @@ register(
 )
 
 
+def _zenodo_file_url(file_meta: dict) -> str:
+    links = file_meta.get("links") or {}
+    return links.get("content") or links.get("self") or links.get("download") or ""
+
+
 def collect_cset_eto(writer) -> None:
     print("\n--- CSET / ETO Country AI Activity ---")
-    for name, filename in CSET_ETO_FILES.items():
-        try:
-            url = CSET_ETO_RECORD.format(filename=filename)
-            r = SESSION.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
-            r.raise_for_status()
-            df = pd.read_csv(io.BytesIO(r.content))
-            write_sheet(writer, df, name, "CSET / ETO")
-        except Exception as exc:
-            log(name, "CSET / ETO", "ERROR", str(exc))
-        time.sleep(SLEEP_BETWEEN_CALLS)
+    try:
+        meta_r = SESSION.get(CSET_ETO_RECORD_API, timeout=REQUEST_TIMEOUT)
+        meta_r.raise_for_status()
+        meta = meta_r.json()
+        files = meta.get("files") or []
+        manifest = pd.DataFrame([
+            {
+                "key": f.get("key"),
+                "size": f.get("size"),
+                "checksum": f.get("checksum"),
+                "download_url": _zenodo_file_url(f),
+            }
+            for f in files
+        ])
+        if not manifest.empty:
+            write_sheet(writer, manifest, "CSET_ETO_File_Manifest", "CSET / ETO Zenodo")
+        else:
+            log("CSET_ETO_File_Manifest", "CSET / ETO", "EMPTY", "Zenodo record returned no files")
+
+        targets_by_filename = {filename: name for name, filename in CSET_ETO_FILES.items()}
+        found: set[str] = set()
+
+        for f in files:
+            key = str(f.get("key") or "")
+            url = _zenodo_file_url(f)
+            if not url:
+                continue
+
+            base = key.rsplit("/", 1)[-1]
+            if base in targets_by_filename:
+                name = targets_by_filename[base]
+                try:
+                    r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+                    r.raise_for_status()
+                    df = pd.read_csv(io.BytesIO(r.content))
+                    write_sheet(writer, df, name, "CSET / ETO")
+                    found.add(base)
+                except Exception as exc:
+                    log(name, "CSET / ETO", "ERROR", str(exc))
+                continue
+
+            if key.lower().endswith(".zip"):
+                try:
+                    r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+                    r.raise_for_status()
+                    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+                        members = zf.namelist()
+                        for target_file, name in targets_by_filename.items():
+                            match = next(
+                                (m for m in members if m.rsplit("/", 1)[-1] == target_file),
+                                None,
+                            )
+                            if match is None:
+                                continue
+                            with zf.open(match) as fh:
+                                df = pd.read_csv(fh)
+                            write_sheet(writer, df, name, "CSET / ETO")
+                            found.add(target_file)
+                except Exception as exc:
+                    log(f"CSET archive {key}", "CSET / ETO", "ERROR", str(exc))
+
+        available_keys = ", ".join(str(f.get("key") or "") for f in files)
+        for filename, name in targets_by_filename.items():
+            if filename not in found:
+                log(
+                    name,
+                    "CSET / ETO",
+                    "EMPTY",
+                    f"Target file not found in current Zenodo record. Available keys: {available_keys}",
+                )
+    except Exception as exc:
+        log("CSET / ETO record metadata", "CSET / ETO", "ERROR", str(exc))
 
 
 # ---------------------------------------------------------------------------
