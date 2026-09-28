@@ -669,6 +669,99 @@ def collect_bea_digital_economy(writer) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Epoch AI model-compute data
+# ---------------------------------------------------------------------------
+
+EPOCH_DATASETS = {
+    "Epoch_Frontier_AI_Models": "https://epoch.ai/data/frontier_ai_models.csv",
+    "Epoch_Notable_AI_Models": "https://epoch.ai/data/notable_ai_models.csv",
+}
+register(
+    "Epoch_Frontier_AI_Models",
+    "Epoch AI",
+    "frontier_ai_models.csv",
+    "Model-level / organization / country fields as published",
+    "Irregular event-level",
+    "frontier-model training compute and related model characteristics",
+    "Epoch defines frontier models as models in the top five of training compute at release.",
+)
+register(
+    "Epoch_Notable_AI_Models",
+    "Epoch AI",
+    "notable_ai_models.csv",
+    "Model-level / organization / country fields as published",
+    "Irregular event-level",
+    "supporting AI model history",
+)
+
+
+def collect_epoch_ai(writer) -> None:
+    print("\n--- Epoch AI ---")
+    for name, url in EPOCH_DATASETS.items():
+        try:
+            r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+            r.raise_for_status()
+            df = pd.read_csv(io.StringIO(r.text))
+            write_sheet(writer, df, name, "Epoch AI")
+        except Exception as exc:
+            log(name, "Epoch AI", "ERROR", str(exc))
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+
+# ---------------------------------------------------------------------------
+# AIOE / AIIE occupational and industry exposure data
+# ---------------------------------------------------------------------------
+
+AIOE_FILES = {
+    "AIOE_Base": "https://raw.githubusercontent.com/AIOE-Data/AIOE/main/AIOE_DataAppendix.xlsx",
+    "AIOE_GenAI_Language": "https://raw.githubusercontent.com/AIOE-Data/AIOE/main/Language%20Modeling%20AIOE%20and%20AIIE.xlsx",
+    "AIOE_GenAI_Image": "https://raw.githubusercontent.com/AIOE-Data/AIOE/main/Image%20Generation%20AIOE%20and%20AIIE.xlsx",
+}
+register(
+    "AIOE_AIIE_AIGE",
+    "Felten-Raj-Seamans / AIOE-Data",
+    "AIOE_DataAppendix.xlsx",
+    "US occupation / industry / county",
+    "Cross-sectional exposure index",
+    "H2 occupational, industry, and geographic AI exposure",
+    "Base workbook contains AIOE by SOC, AIIE by NAICS, and AIGE by FIPS.",
+)
+register(
+    "AIOE_Generative_AI_Extensions",
+    "AIOE-Data",
+    "Language Modeling / Image Generation AIOE and AIIE",
+    "US occupation / industry",
+    "Cross-sectional exposure index",
+    "H2 generative-AI exposure extensions",
+)
+
+
+def collect_aioe(writer) -> None:
+    print("\n--- AIOE / AIIE ---")
+    for file_label, url in AIOE_FILES.items():
+        try:
+            r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+            r.raise_for_status()
+            book = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
+            wrote = 0
+            for idx, (sheet_name, df) in enumerate(book.items(), start=1):
+                if df is None or df.empty:
+                    continue
+                write_sheet(
+                    writer,
+                    df,
+                    f"{file_label}_{idx:02d}_{sheet_name}",
+                    "AIOE-Data",
+                )
+                wrote += 1
+            if wrote == 0:
+                log(file_label, "AIOE-Data", "EMPTY", "No non-empty sheets found")
+        except Exception as exc:
+            log(file_label, "AIOE-Data", "ERROR", str(exc))
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+
+# ---------------------------------------------------------------------------
 # Manual / not-yet-automated sources
 # ---------------------------------------------------------------------------
 
@@ -692,10 +785,10 @@ MANUAL_SOURCES = [
         "Note": "Select exact public tables and preserve the underlying provider/methodology.",
     },
     {
-        "Variable": "Epoch AI – Notable AI Models",
-        "URL": "https://epoch.ai/data/notable-ai-models",
-        "Status": "data acquisition still required",
-        "Note": "Model-level data; country attribution and aggregation require an explicit methodology.",
+        "Variable": "Epoch AI – model aggregation into country-time panels",
+        "URL": "https://epoch.ai/data/ai-models",
+        "Status": "raw Frontier/Notable model files automated; aggregation methodology still required",
+        "Note": "Keep model-level observations distinct from any later country/year aggregation.",
     },
     {
         "Variable": "CSET / ETO Country Activity Tracker",
@@ -704,10 +797,10 @@ MANUAL_SOURCES = [
         "Note": "Candidate source for AI patents/research/investment; verify exact table and lag.",
     },
     {
-        "Variable": "AIOE / AIIE / AIGE",
+        "Variable": "AIOE / AIIE / AIGE employment matching",
         "URL": "https://github.com/AIOE-Data/AIOE",
-        "Status": "data acquisition still required",
-        "Note": "Needed with compatible SOC/NAICS employment histories for H2.",
+        "Status": "raw exposure workbooks automated; compatible employment histories/crosswalk still required",
+        "Note": "Do not treat exposure scores alone as H2-ready without matched SOC/NAICS employment/output data.",
     },
     {
         "Variable": "OECD Going Digital / OECD.AI",
@@ -732,6 +825,8 @@ def main() -> None:
             collect_oecd(writer)
             collect_imf(writer)
             collect_bea_digital_economy(writer)
+            collect_epoch_ai(writer)
+            collect_aioe(writer)
 
             pd.DataFrame(MANUAL_SOURCES).to_excel(
                 writer, sheet_name="Manual Sources", index=False
