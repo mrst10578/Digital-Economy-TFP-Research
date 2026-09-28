@@ -202,6 +202,12 @@ def fetch_fred_series(series_id: str) -> pd.DataFrame:
         df = pd.read_csv(io.StringIO(r.text))
         if "DATE" in df.columns:
             df = df.rename(columns={"DATE": "Date"})
+        elif "observation_date" in df.columns:
+            df = df.rename(columns={"observation_date": "Date"})
+        elif "date" in df.columns:
+            df = df.rename(columns={"date": "Date"})
+        else:
+            raise ValueError(f"FRED CSV did not contain a recognized date column: {list(df.columns)}")
         if series_id not in df.columns:
             raise ValueError(f"FRED CSV did not contain expected column {series_id}")
         df = df[["Date", series_id]]
