@@ -270,7 +270,7 @@ def collect_fred(writer) -> None:
 WORLDBANK_INDICATORS = {
     "WB_Real_GDP_Level": "NY.GDP.MKTP.KD",
     "WB_Labor_Productivity": "SL.GDP.PCAP.EM.KD",
-    "WB_Total_Employment": "SL.EMP.TOTL",
+    "WB_Employment_to_Population": "SL.EMP.TOTL.SP.ZS",
     "WB_Internet_Users_Percent": "IT.NET.USER.ZS",
     "WB_Fixed_Broadband_Per_100": "IT.NET.BBND.P2",
     "WB_R_and_D_Percent_GDP": "GB.XPD.RSDV.GD.ZS",
@@ -506,6 +506,10 @@ BLS_SERIES = {
     "BLS_Total_Nonfarm_Payrolls": "CES0000000001",
     "BLS_CPI_All_Items": "CUUR0000SA0",
     "BLS_Computer_Systems_Design_Emp": "CES6054150001",
+    "BLS_PPI_Information_Sector": "PCUAINFO-AINFO-",
+    "BLS_PPI_Data_Processing_Hosting": "PCU518210518210",
+    "BLS_PPI_Wired_Telecom": "PCU517311517311",
+    "BLS_PPI_Wireless_Telecom": "PCU517312517312",
 }
 for _name, _sid in BLS_SERIES.items():
     register(_name, "BLS", _sid, "US", "Monthly", "research-document / supporting labor-price series")
@@ -1214,7 +1218,7 @@ RESEARCH_REQUIREMENTS = [
     ["LB07","Labor/structure","Labor turnover","Matching efficiency","FRED JTSHIL / JTSQUL / JTSTSL","US collected","available US-only"],
     ["PR01","Prices","Headline CPI/inflation","Price control/outcome","WDI FP.CPI.TOTL.ZG; FRED CPIAUCSL; BLS CUUR0000SA0","Iran + cross-country + US collected","available"],
     ["PR02","Prices","Core CPI / core PCE","Underlying inflation","FRED CPILFESL / PCEPILFE","US collected","available US-only"],
-    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series","sector universe/mapping not approved yet","definition pending / missing"],
+    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series","BLS PPI candidates collected for Information, data processing/hosting, wired telecom and wireless telecom","partial; sector mapping still pending"],
     ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from price series","raw inputs partly collected; window/frequency not approved","derived methodology pending"],
     ["FN01","Finance/uncertainty","Economic Policy Uncertainty","H6 uncertainty measure","FRED USEPUINDXM / USEPUINDXD","US monthly + daily collected","available US-only"],
     ["FN02","Finance/uncertainty","VIX","Financial interaction","FRED VIXCLS","US market collected","available US-only"],
@@ -1227,8 +1231,8 @@ RESEARCH_REQUIREMENTS = [
 
 HYPOTHESIS_DATA_MATRIX = [
     ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US capex/productivity/TFP + WDI country labor productivity + CSET country AI investment collected","partial","Country-year overlap and the final digital/AI-capex definition must be audited; no estimation authorized"],
-    ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + country total-employment/output series collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
-    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Aggregate prices collected","missing","Sector universe, sectoral price data and digital-intensity mapping still missing"],
+    ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + WDI employment-to-population/output series (including Iran) collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
+    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Aggregate prices + BLS monthly PPI candidates for several ICT-heavy industries collected","partial","A broader sector universe and an approved digital-intensity mapping are still needed"],
     ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","partial","Return construction, final asset universe and frequency are still to be specified"],
     ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
     ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates and nonresidential-investment candidates collected","partial","Major-event selection and the final non-AI investment definition are still to be specified"],
@@ -1327,7 +1331,7 @@ def format_client_workbook(writer) -> None:
 
     # Put the review sheets directly after Read Me; leave all source sheets behind them.
     preferred = ["Read Me", "Iran Data", "Iran Coverage", "Coverage", "Variable Index",
-                 "Research Questions", "Data Dictionary", "Method Notes", "Pending Data", "Source Log"]
+                 "Research Questions", "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
     ordered = []
     seen = set()
     for name in preferred:
