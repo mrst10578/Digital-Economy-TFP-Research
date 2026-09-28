@@ -141,9 +141,10 @@ def add_iran_long_rows(
     country_col: str,
     observation_status: str,
 ) -> None:
-    if country_col not in df.columns:
+    if country_col not in df.columns or value_col not in df.columns:
         return
     subset = df[df[country_col].astype(str) == "IRN"].copy()
+    subset = subset[numeric_valid(subset[value_col])].copy()
     for _, row in subset.iterrows():
         _iran_rows.append({
             "source": source,
@@ -493,6 +494,10 @@ def _gem_period_key(value):
     return (year, month, text_value)
 
 
+def _normalize_country_label(value) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(value).lower()).strip()
+
+
 def fetch_worldbank_gem_indicator(code: str, entity_meta: dict[str, dict]) -> pd.DataFrame:
     page = 1
     rows = []
@@ -534,6 +539,24 @@ def fetch_worldbank_gem_indicator(code: str, entity_meta: dict[str, dict]) -> pd
         "value": code,
     })
     df[code] = pd.to_numeric(df[code], errors="coerce")
+
+    # GEM sometimes returns country names with a blank ISO3 code. Recover ISO3
+    # from official World Bank entity metadata so Iran and other countries are
+    # auditable instead of silently disappearing from country coverage.
+    name_to_iso3 = {
+        _normalize_country_label(meta.get("Entity_Name", "")): iso3
+        for iso3, meta in entity_meta.items()
+        if meta.get("Entity_Type") == "country"
+    }
+    iso_text = df["ISO3"].astype(str).str.strip()
+    missing_iso = iso_text.isin({"", "nan", "None", "<NA>"})
+    df.loc[missing_iso, "ISO3"] = df.loc[missing_iso, "Country"].map(
+        lambda value: name_to_iso3.get(_normalize_country_label(value), "")
+    )
+    # Explicit alias for GEM's punctuation-free Iran label.
+    iran_alias = df["Country"].astype(str).map(_normalize_country_label) == "iran islamic rep"
+    df.loc[iran_alias & (df["ISO3"].astype(str).str.strip() == ""), "ISO3"] = "IRN"
+
     df["Entity_Type"] = df["ISO3"].map(
         lambda x: entity_meta.get(str(x), {}).get("Entity_Type", "unknown")
     )
@@ -543,12 +566,35 @@ def fetch_worldbank_gem_indicator(code: str, entity_meta: dict[str, dict]) -> pd
 def add_worldbank_gem_coverage(df: pd.DataFrame, name: str, code: str) -> None:
     if df.empty:
         return
-    for iso3, group in df.groupby("ISO3", dropna=False):
+    for (iso3, country_name), group in df.groupby(["ISO3", "Country"], dropna=False):
         valid = group[numeric_valid(group[code])].copy()
-        if valid.empty:
-            continue
-        periods = sorted(valid["Period"].astype(str).unique().tolist(), key=_gem_period_key)
         entity_type = str(group["Entity_Type"].iloc[0]) if "Entity_Type" in group.columns else "unknown"
+        if valid.empty:
+            _coverage_rows.append({
+                "variable_id": code,
+                "variable_name": name,
+                "country_iso3": iso3,
+                "entity_type": entity_type,
+                "source": "World Bank GEM",
+                "series_id": code,
+                "frequency": "mixed GEM period labels",
+                "first_valid_period": None,
+                "last_valid_period": None,
+                "valid_observations": 0,
+                "expected_periods": None,
+                "missing_periods": None,
+                "coverage_percent": None,
+                "longest_contiguous_start": None,
+                "longest_contiguous_end": None,
+                "observation_status": "entity returned but no numeric industrial-production value",
+                "comparability_status": "no usable numeric GEM observation in current extract",
+                "availability_status": "missing from current GEM extract",
+                "notes": f"World Bank GEM source=15; returned entity name: {country_name}.",
+                "retrieved_at": RETRIEVED_AT,
+            })
+            continue
+
+        periods = sorted(valid["Period"].astype(str).unique().tolist(), key=_gem_period_key)
         _coverage_rows.append({
             "variable_id": code,
             "variable_name": name,
@@ -568,7 +614,7 @@ def add_worldbank_gem_coverage(df: pd.DataFrame, name: str, code: str) -> None:
             "observation_status": "official source values",
             "comparability_status": "constant-US$ industrial-production series; inspect frequency/base metadata before estimation",
             "availability_status": "available",
-            "notes": "World Bank Global Economic Monitor, source=15.",
+            "notes": f"World Bank GEM source=15; returned entity name: {country_name}.",
             "retrieved_at": RETRIEVED_AT,
         })
 
@@ -733,18 +779,81 @@ BLS_SERIES = {
     "BLS_PPI_Data_Processing_Hosting": "PCU518210518210",
     "BLS_PPI_Wired_Telecom": "PCU517311517311",
     "BLS_PPI_Wireless_Telecom": "PCU517312517312",
+    "BLS_PPI_Total_Manufacturing": "PCUOMFGOMFG",
+    "BLS_PPI_Total_Mining": "PCUOMINOMIN",
+    "BLS_PPI_Transportation_Warehousing": "PCUATRNWRATRNWR",
+    "BLS_PPI_Wholesale_Trade": "PCUAWHLTRAWHLTR",
+    "BLS_PPI_Retail_Trade": "PCUARETTRARETTR",
 }
+
+# FRED republishes these BLS series through its official keyless CSV endpoint.
+# Using the mirror in keyless CI avoids the BLS anonymous daily-request ceiling
+# while preserving the BLS series provenance.
+BLS_FRED_MIRRORS = {
+    "BLS_Unemployment_Rate": "UNRATE",
+    "BLS_Total_Nonfarm_Payrolls": "PAYEMS",
+    "BLS_CPI_All_Items": "CPIAUCNS",
+    "BLS_Computer_Systems_Design_Emp": "CES6054150001",
+    "BLS_PPI_Information_Sector": "PCUAINFOAINFO",
+    "BLS_PPI_Data_Processing_Hosting": "PCU518210518210",
+    "BLS_PPI_Wired_Telecom": "PCU517311517311",
+    "BLS_PPI_Wireless_Telecom": "PCU517312517312",
+    "BLS_PPI_Total_Manufacturing": "PCUOMFGOMFG",
+    "BLS_PPI_Total_Mining": "PCUOMINOMIN",
+    "BLS_PPI_Transportation_Warehousing": "PCUATRNWRATRNWR",
+    "BLS_PPI_Wholesale_Trade": "PCUAWHLTRAWHLTR",
+    "BLS_PPI_Retail_Trade": "PCUARETTRARETTR",
+}
+
 for _name, _sid in BLS_SERIES.items():
-    register(_name, "BLS", _sid, "US", "Monthly", "research-document / supporting labor-price series")
+    mirror = BLS_FRED_MIRRORS.get(_name, "")
+    register(
+        _name,
+        "BLS (official series; FRED mirror used when keyless)",
+        _sid,
+        "US",
+        "Monthly",
+        "research-document / supporting labor-price series",
+        f"Keyless FRED mirror series: {mirror}" if mirror else "",
+    )
 
 # 1913 is the earliest start among the currently configured BLS series set (CPI).
 # It is a source-specific floor, not a project-wide research start year.
 BLS_HISTORY_START = 1913
 
 
+def _collect_bls_via_fred_mirror(writer) -> None:
+    for name, bls_sid in BLS_SERIES.items():
+        fred_sid = BLS_FRED_MIRRORS.get(name)
+        if not fred_sid:
+            log(name, "BLS/FRED mirror", "ERROR", "No FRED mirror mapping configured")
+            continue
+        try:
+            raw = fetch_fred_series(fred_sid)
+            if raw.empty:
+                write_sheet(writer, raw, name, "FRED mirror of BLS")
+                continue
+            out = raw.rename(columns={fred_sid: "value_numeric"}).copy()
+            out["BLS_Series_ID"] = bls_sid
+            out["FRED_Mirror_ID"] = fred_sid
+            out["Source_Note"] = "Official BLS-origin series retrieved via Federal Reserve FRED mirror"
+            write_sheet(writer, out, name, "FRED mirror of BLS")
+        except Exception as exc:
+            log(name, "BLS/FRED mirror", "ERROR", str(exc))
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+
 def collect_bls(writer) -> None:
     print("\n--- BLS ---")
-    span = 20 if BLS_API_KEY else 10
+
+    # GitHub Actions normally has no BLS registration key. The public BLS API
+    # has a low anonymous daily request ceiling, so repeated professional
+    # builds can regress. Use FRED's official mirror in that case.
+    if not BLS_API_KEY:
+        _collect_bls_via_fred_mirror(writer)
+        return
+
+    span = 20
     by_series: dict[str, list[dict]] = {sid: [] for sid in BLS_SERIES.values()}
 
     chunk_start = BLS_HISTORY_START
@@ -754,9 +863,8 @@ def collect_bls(writer) -> None:
             "seriesid": list(BLS_SERIES.values()),
             "startyear": str(chunk_start),
             "endyear": str(chunk_end),
+            "registrationKey": BLS_API_KEY,
         }
-        if BLS_API_KEY:
-            body["registrationKey"] = BLS_API_KEY
 
         try:
             r = SESSION.post(
@@ -1416,8 +1524,8 @@ MANUAL_SOURCES = [
     {
         "Variable": "Iran industrial production",
         "URL": "https://data.imf.org/Datasets/PI",
-        "Status": "official IMF Production Indexes route verified; World Bank GEM automation added as immediately downloadable alternative",
-        "Note": "Do not substitute manufacturing value added for a high-frequency industrial-production indicator.",
+        "Status": "IMF Iran annual/quarterly series identifiers documented; GEM Iran entity returned but current extract has no numeric values",
+        "Note": "The gap remains open until numeric Iran IPI values are obtained through a reproducible official route; do not substitute manufacturing value added.",
     },
     {
         "Variable": "Iran monetary-policy rate",
@@ -1484,7 +1592,71 @@ IRAN_REPORTED_DIGITAL_ECONOMY = [
     },
 ]
 
+IRAN_INDUSTRIAL_PRODUCTION_SOURCE_MAP = [
+    {
+        "Source": "IMF Production Indexes (PI)",
+        "Series_ID": "IRN.IND.IX.A",
+        "Frequency": "Annual",
+        "Reported_Start": 1948,
+        "Direct_Values_In_Workbook": "NO",
+        "Status": "series identifier located in an IMF-derived database mirror; direct IMF values still need a reproducible official download route",
+        "Primary_URL": "https://data.imf.org/Datasets/PI",
+        "Identifier_Evidence_URL": "https://net-imf.tedc.org.tw/",
+    },
+    {
+        "Source": "IMF Production Indexes (PI)",
+        "Series_ID": "IRN.IND.IX.Q",
+        "Frequency": "Quarterly",
+        "Reported_Start": 1948,
+        "Direct_Values_In_Workbook": "NO",
+        "Status": "series identifier located in an IMF-derived database mirror; direct IMF values still need a reproducible official download route",
+        "Primary_URL": "https://data.imf.org/Datasets/PI",
+        "Identifier_Evidence_URL": "https://net-imf.tedc.org.tw/",
+    },
+    {
+        "Source": "World Bank Global Economic Monitor",
+        "Series_ID": "IPTOTSAKD",
+        "Frequency": "as returned by GEM",
+        "Reported_Start": None,
+        "Direct_Values_In_Workbook": "CHECK COVERAGE",
+        "Status": "Iran entity is returned by GEM; run 22 showed no numeric Iran observations, so this is not treated as filled",
+        "Primary_URL": "https://api.worldbank.org/v2/country/all/indicator/IPTOTSAKD?source=15&format=json",
+        "Identifier_Evidence_URL": "",
+    },
+    {
+        "Source": "Iran Parliament Research Center industrial-production index",
+        "Series_ID": "definition/source route only",
+        "Frequency": "monthly/periodic source dependent",
+        "Reported_Start": None,
+        "Direct_Values_In_Workbook": "NO",
+        "Status": "World Bank Iran Economic Monitor documents an IPI covering more than 302 listed industrial companies; raw series not yet automated",
+        "Primary_URL": "https://www.worldbank.org/en/country/iran/publication/economic-monitor",
+        "Identifier_Evidence_URL": "",
+    },
+]
+
 IRAN_MONETARY_POLICY_CANDIDATES = [
+    {
+        "Iranian_Date": "1402-11 onward (documented in 1403 report)",
+        "Metric": "Minimum repo rate in weekly open-market operations",
+        "Percent": 23.0,
+        "Interpretation": "Parliament Research Center documents 23% as the effective weekly-auction target; retain as an operational proxy, not a universal conventional policy rate.",
+        "Source_URL": "https://doi.org/10.22034/report.mrc.2024.1403.32.7.20582",
+    },
+    {
+        "Iranian_Date": "1402-11 onward (documented in 1403 report)",
+        "Metric": "Interest-rate corridor floor",
+        "Percent": 17.0,
+        "Interpretation": "Lower bound of the CBI interest-rate corridor documented by the Parliament Research Center.",
+        "Source_URL": "https://doi.org/10.22034/report.mrc.2024.1403.32.7.20582",
+    },
+    {
+        "Iranian_Date": "1402-11 onward (documented in 1403 report)",
+        "Metric": "Interest-rate corridor ceiling",
+        "Percent": 24.0,
+        "Interpretation": "Upper bound of the CBI interest-rate corridor documented by the Parliament Research Center.",
+        "Source_URL": "https://doi.org/10.22034/report.mrc.2024.1403.32.7.20582",
+    },
     {
         "Iranian_Date": "1403-10-10",
         "Metric": "Minimum repo rate in open-market operation",
@@ -1511,7 +1683,7 @@ IRAN_MONETARY_POLICY_CANDIDATES = [
 RESEARCH_REQUIREMENTS = [
     ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; WDI NY.GDP.MKTP.KD","US + Iran + cross-country WDI level collected","available"],
     ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
-    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US collected; World Bank GEM automation added for Iran/cross-country validation","partial pending run validation"],
+    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US collected; GEM Iran entity returned but no numeric Iran values in run 22; IMF Iran annual/quarterly identifiers documented for follow-up","partial; Iran numeric series still missing"],
     ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
     ["BC05","Business cycle","Nonfarm payroll employment","US labor control","FRED PAYEMS / BLS CES0000000001","US collected; not an Iran series","available US-only"],
     ["BC06","Business cycle","Recession indicator/dating","Regime variable","FRED USREC / NBER","US collected; not an Iran series","available US-only"],
@@ -1537,7 +1709,7 @@ RESEARCH_REQUIREMENTS = [
     ["LB07","Labor/structure","Labor turnover","Matching efficiency","FRED JTSHIL / JTSQUL / JTSTSL","US collected","available US-only"],
     ["PR01","Prices","Headline CPI/inflation","Price control/outcome","WDI FP.CPI.TOTL.ZG; FRED CPIAUCSL; BLS CUUR0000SA0","Iran + cross-country + US collected","available"],
     ["PR02","Prices","Core CPI / core PCE","Underlying inflation","FRED CPILFESL / PCEPILFE","US collected","available US-only"],
-    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series + OECD digital-intensity taxonomy","BLS PPI candidates collected and OECD ISIC Rev.4 digital-intensity mapping embedded","partial; broader sector-price universe still needed"],
+    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS series via official FRED mirror + OECD digital-intensity taxonomy","ICT PPI plus manufacturing, mining, transport/warehousing, wholesale and retail PPI collected reproducibly; OECD ISIC Rev.4 digital-intensity mapping embedded","partial; NAICS-to-ISIC crosswalk and persistence definition remain"],
     ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from price series","raw inputs partly collected; window/frequency not approved","derived methodology pending"],
     ["FN01","Finance/uncertainty","Economic Policy Uncertainty","H6 uncertainty measure","FRED USEPUINDXM / USEPUINDXD","US monthly + daily collected","available US-only"],
     ["FN02","Finance/uncertainty","VIX","Financial interaction","FRED VIXCLS","US market collected","available US-only"],
@@ -1551,7 +1723,7 @@ RESEARCH_REQUIREMENTS = [
 HYPOTHESIS_DATA_MATRIX = [
     ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US capex/productivity/TFP + WDI country labor productivity + CSET country AI investment collected","partial","Country-year overlap and the final digital/AI-capex definition must be audited; no estimation authorized"],
     ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + WDI employment-to-population/output series (including Iran) collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
-    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","BLS monthly PPI candidates + official OECD ISIC Rev.4 digital-intensity taxonomy collected","partial","Broader sector-price coverage and persistence-window definition remain; digital-intensity mapping itself is now documented"],
+    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Monthly BLS-origin PPI series retrieved via FRED mirror across ICT plus several broader sectors; OECD ISIC Rev.4 intensity taxonomy documented","partial","NAICS-to-ISIC crosswalk and persistence-window definition remain; no estimator is imposed"],
     ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","partial","Return construction, final asset universe and frequency are still to be specified"],
     ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
     ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates and nonresidential-investment candidates collected","partial","Major-event selection and the final non-AI investment definition are still to be specified"],
@@ -1575,6 +1747,9 @@ def write_requirement_matrices(writer) -> None:
     ).to_excel(writer, sheet_name="OECD Digital Intensity", index=False)
     excel_safe_dataframe(pd.DataFrame(IRAN_REPORTED_DIGITAL_ECONOMY)).to_excel(
         writer, sheet_name="Iran Digital Economy", index=False
+    )
+    excel_safe_dataframe(pd.DataFrame(IRAN_INDUSTRIAL_PRODUCTION_SOURCE_MAP)).to_excel(
+        writer, sheet_name="Iran IPI Source Map", index=False
     )
     excel_safe_dataframe(pd.DataFrame(IRAN_MONETARY_POLICY_CANDIDATES)).to_excel(
         writer, sheet_name="Iran Monetary Rates", index=False
@@ -1606,7 +1781,7 @@ def format_client_workbook(writer) -> None:
     ws["A7"] = "Research stage"
     ws["B7"] = "This file is a data delivery and coverage workbook. It does not contain econometric estimates."
     ws["A9"] = "Useful sheets"
-    ws["B9"] = "Iran Data; Iran Coverage; Iran Digital Economy; Iran Monetary Rates; Country Summary; Coverage; Variable Index; Research Questions; OECD Digital Intensity; Data Dictionary; Source Follow-up; Source Log; Method Notes"
+    ws["B9"] = "Iran Data; Iran Coverage; Iran Digital Economy; Iran IPI Source Map; Iran Monetary Rates; Country Summary; Coverage; Variable Index; Research Questions; OECD Digital Intensity; Data Dictionary; Source Follow-up; Source Log; Method Notes"
     ws["A11"] = "Source note"
     ws["B11"] = "Source URLs and series identifiers are retained in the data dictionary and source-specific sheets."
     ws.column_dimensions["A"].width = 22
@@ -1661,7 +1836,7 @@ def format_client_workbook(writer) -> None:
                 sh.column_dimensions[letter].width = min(max(max_len + 2, 11), 38)
 
     # Put the review sheets directly after Read Me; leave all source sheets behind them.
-    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Iran Digital Economy", "Iran Monetary Rates",
+    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Iran Digital Economy", "Iran IPI Source Map", "Iran Monetary Rates",
                  "Country Summary", "Coverage", "Variable Index", "Research Questions", "OECD Digital Intensity",
                  "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
     ordered = []
