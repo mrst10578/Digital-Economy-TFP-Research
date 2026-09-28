@@ -49,6 +49,7 @@ _log_rows: list[dict] = []
 _coverage_rows: list[dict] = []
 _iran_rows: list[dict] = []
 _dictionary_rows: list[dict] = []
+_country_name_to_iso3: dict[str, str] = {}
 
 retry = Retry(
     total=3,
@@ -442,8 +443,14 @@ def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
 
 
 def collect_worldbank(writer) -> None:
+    global _country_name_to_iso3
     print("\n--- World Bank ---")
     entity_df, entity_meta = fetch_worldbank_entity_metadata()
+    _country_name_to_iso3 = {
+        str(row["Entity_Name"]).strip(): str(row["ISO3"]).strip()
+        for _, row in entity_df.iterrows()
+        if str(row.get("Entity_Type", "")) == "country"
+    }
     write_sheet(writer, entity_df, "WorldBank_Entity_Metadata", "World Bank")
     for name, code in WORLDBANK_INDICATORS.items():
         try:
@@ -904,11 +911,15 @@ def add_cset_country_coverage(
             f"Field-disaggregated source. Coverage counts unique years with any returned row; "
             f"do not sum fields without reviewing overlap. Complete-flagged rows: {complete_rows}."
         )
+        source_country = str(country).strip()
+        mapped_iso3 = _country_name_to_iso3.get(source_country)
+        if source_country == "Iran":
+            mapped_iso3 = "IRN"
         _coverage_rows.append({
             "variable_id": series_id,
             "variable_name": variable_name,
-            "country_iso3": country,
-            "entity_type": "country_or_group_as_named_by_CSET",
+            "country_iso3": mapped_iso3 or source_country,
+            "entity_type": "country" if mapped_iso3 else "country_or_group_as_named_by_CSET",
             "source": "CSET / ETO Country AI Activity Metrics",
             "series_id": series_id,
             "frequency": "annual",
@@ -1275,7 +1286,7 @@ def format_client_workbook(writer) -> None:
     ws["A7"] = "Research stage"
     ws["B7"] = "This file is a data delivery and coverage workbook. It does not contain econometric estimates."
     ws["A9"] = "Useful sheets"
-    ws["B9"] = "Iran Data; Iran Coverage; Coverage; Variable Index; Research Questions; Data Dictionary; Source Follow-up; Source Log; Method Notes"
+    ws["B9"] = "Iran Data; Iran Coverage; Country Summary; Coverage; Variable Index; Research Questions; Data Dictionary; Source Follow-up; Source Log; Method Notes"
     ws["A11"] = "Source note"
     ws["B11"] = "Source URLs and series identifiers are retained in the data dictionary and source-specific sheets."
     ws.column_dimensions["A"].width = 22
@@ -1330,7 +1341,7 @@ def format_client_workbook(writer) -> None:
                 sh.column_dimensions[letter].width = min(max(max_len + 2, 11), 38)
 
     # Put the review sheets directly after Read Me; leave all source sheets behind them.
-    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Coverage", "Variable Index",
+    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Country Summary", "Coverage", "Variable Index",
                  "Research Questions", "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
     ordered = []
     seen = set()
@@ -1374,6 +1385,61 @@ def main() -> None:
                     coverage_df["country_iso3"].astype(str) == "IRN"
                 ].copy()
                 excel_safe_dataframe(iran_cov).to_excel(writer, sheet_name="Iran Coverage", index=False)
+
+                # Client-facing country summary: Iran is mandatory, while all other
+                # countries are kept whenever official source coverage exists.
+                country_cov = coverage_df[
+                    coverage_df["entity_type"].astype(str) == "country"
+                ].copy()
+                country_cov["valid_observations_num"] = pd.to_numeric(
+                    country_cov["valid_observations"], errors="coerce"
+                ).fillna(0)
+                country_cov = country_cov[country_cov["valid_observations_num"] > 0]
+
+                if not country_cov.empty:
+                    flag_ids = {
+                        "GDP_Growth": "NY.GDP.MKTP.KD.ZG",
+                        "Internet": "IT.NET.USER.ZS",
+                        "Broadband": "IT.NET.BBND.P2",
+                        "R_and_D": "GB.XPD.RSDV.GD.ZS",
+                        "HighTech_Exports": "TX.VAL.TECH.MF.ZS",
+                        "Labor_Productivity": "SL.GDP.PCAP.EM.KD",
+                        "Employment_Ratio": "SL.EMP.TOTL.SP.ZS",
+                        "AI_Patents": "patents_yearly_applications.csv",
+                    }
+                    investment_ids = {
+                        "companies_yearly_disclosed.csv",
+                        "companies_yearly_estimated.csv",
+                    }
+                    summary_rows = []
+                    for iso3, group in country_cov.groupby("country_iso3", dropna=False):
+                        ids = set(group["variable_id"].astype(str))
+                        first_vals = pd.to_numeric(group["first_valid_period"], errors="coerce").dropna()
+                        last_vals = pd.to_numeric(group["last_valid_period"], errors="coerce").dropna()
+                        row = {
+                            "country_iso3": iso3,
+                            "mandatory_iran": "YES" if str(iso3) == "IRN" else "",
+                            "variables_with_data": int(group["variable_id"].nunique()),
+                            "sources_with_data": int(group["source"].nunique()),
+                            "first_any_period": int(first_vals.min()) if not first_vals.empty else None,
+                            "last_any_period": int(last_vals.max()) if not last_vals.empty else None,
+                        }
+                        for label, variable_id in flag_ids.items():
+                            row[f"has_{label}"] = "YES" if variable_id in ids else ""
+                        row["has_AI_Investment"] = "YES" if ids.intersection(investment_ids) else ""
+                        summary_rows.append(row)
+
+                    country_summary = pd.DataFrame(summary_rows)
+                    country_summary["_iran_sort"] = (
+                        country_summary["country_iso3"].astype(str) != "IRN"
+                    ).astype(int)
+                    country_summary = country_summary.sort_values(
+                        ["_iran_sort", "variables_with_data", "country_iso3"],
+                        ascending=[True, False, True],
+                    ).drop(columns=["_iran_sort"])
+                    excel_safe_dataframe(country_summary).to_excel(
+                        writer, sheet_name="Country Summary", index=False
+                    )
 
             iran_df = pd.DataFrame(_iran_rows)
             if not iran_df.empty:
