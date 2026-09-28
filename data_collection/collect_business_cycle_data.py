@@ -914,47 +914,68 @@ register(
 
 def collect_oecd_ict_business(writer) -> None:
     print("\n--- OECD ICT business digitalization ---")
-    # G14_B is the AI-use measure that materially extends AI06. Keep this
-    # request bounded so an upstream OECD outage cannot stall the entire build.
+    # G14_B is the AI-use measure that materially extends AI06. Start with
+    # bounded country batches, then retry any failed batch one country at a
+    # time so a transient OECD 500 does not remove an entire region.
     area_batches = [
         ["AUS","AUT","BEL","CAN","CHE","CHL","COL","CRI","CZE","DEU"],
         ["DNK","ESP","EST","FIN","FRA","GBR","GRC","HUN","IRL","ISL"],
         ["ISR","ITA","JPN","KOR","LTU","LUX","LVA","MEX","NLD","NOR"],
         ["NZL","POL","PRT","SVK","SVN","SWE","TUR","USA"],
     ]
-    frames = []
-    failures = []
-    for areas in area_batches:
+
+    def fetch_areas(areas):
         area_key = "+".join(areas)
         url = (
             "https://sdmx.oecd.org/public/rest/data/"
             "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
             f"{area_key}.A.G14_B.PT_ENT._T.S_GE10"
         )
+        r = requests.get(
+            url,
+            params={
+                "startPeriod": "2020",
+                "dimensionAtObservation": "AllDimensions",
+            },
+            headers={"Accept": "text/csv"},
+            timeout=12,
+        )
+        r.raise_for_status()
+        return pd.read_csv(io.StringIO(r.text), low_memory=False)
+
+    frames = []
+    failed_batches = []
+    individual_failures = []
+    for areas in area_batches:
         try:
-            r = requests.get(
-                url,
-                params={
-                    "startPeriod": "2020",
-                    "dimensionAtObservation": "AllDimensions",
-                },
-                headers={"Accept": "text/csv"},
-                timeout=15,
-            )
-            r.raise_for_status()
-            part = pd.read_csv(io.StringIO(r.text), low_memory=False)
+            part = fetch_areas(areas)
             if not part.empty:
                 frames.append(part)
         except Exception as exc:
-            failures.append(f"{area_key}: {exc}")
+            failed_batches.append(("+".join(areas), str(exc)))
+            # Retry each country independently. Empty responses are acceptable
+            # because some OECD members do not report this measure for every year.
+            for area in areas:
+                try:
+                    part = fetch_areas([area])
+                    if not part.empty:
+                        frames.append(part)
+                except Exception as indiv_exc:
+                    individual_failures.append(f"{area}: {indiv_exc}")
+
     if frames:
         df = pd.concat(frames, ignore_index=True).drop_duplicates()
         write_sheet(writer, df, "OECD_ICT_Business_Digital", "OECD ICT Access and Usage by Businesses")
+        covered = sorted(df["REF_AREA"].dropna().astype(str).unique().tolist()) if "REF_AREA" in df.columns else []
         log(
             "OECD ICT business AI-adoption panel",
             "OECD ICT",
             "OK",
-            f"{len(df)} rows from {len(frames)} successful country batches; {len(failures)} failed batches.",
+            (
+                f"{len(df)} rows; {len(covered)} economies with returned observations; "
+                f"{len(failed_batches)} batch requests required country-level fallback; "
+                f"{len(individual_failures)} country requests unavailable."
+            ),
             len(df),
         )
     else:
@@ -962,7 +983,7 @@ def collect_oecd_ict_business(writer) -> None:
             "OECD_ICT_Business_Digital",
             "OECD ICT",
             "NOT_AVAILABLE",
-            "No OECD AI-adoption batch returned in this run; BTOS and World Bank DAI remain available and the OECD route is documented.",
+            "No OECD AI-adoption observation returned; BTOS and World Bank DAI remain available and the OECD route is documented.",
         )
 
 
