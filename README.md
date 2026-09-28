@@ -1,28 +1,49 @@
 # AI, Digital Economy & Business Cycle Dynamics
 
-این ریپو مربوط به پروژه اصلی بررسی اثر اقتصاد دیجیتال و هوش مصنوعی بر پویایی چرخه‌های تجاری است.
+این ریپو برای جمع‌آوری، مستندسازی و آماده‌سازی داده‌های پروژه‌ی اقتصاد دیجیتال، هوش مصنوعی و پویایی چرخه‌های تجاری ساخته شده است.
 
-## فاز فعلی: جمع‌آوری داده
+## فاز فعلی: Data Collection + Coverage Audit
 
-در این مرحله هنوز سراغ برآورد نهایی نمی‌رویم. اول باید داده‌های موردنیاز از منابع رسمی جمع شوند، پوشش زمانی و فرکانس آن‌ها مشخص شود و کیفیت هر سری بررسی شود.
+در این فاز **مدل اقتصاد‌سنجی نهایی اجرا نمی‌شود**. ابتدا داده‌های موردنیاز از منابع عمومی جمع‌آوری می‌شوند، پوشش کشور/زمان/فرکانس آن‌ها Audit می‌شود و شکاف‌های واقعی بدون ساختن داده‌ی مصنوعی ثبت می‌شوند.
 
-اسکریپت فاز اول در مسیر زیر قرار دارد:
+اسکریپت اصلی:
 
 `data_collection/collect_business_cycle_data.py`
 
-خروجی:
+خروجی اصلی:
 
 `AI_Digital_Economy_BusinessCycle_Data.xlsx`
 
-## منابع فعلی
+## منابع فعال
 
 - FRED
-- World Bank Open Data
-- BEA
-- BLS
-- OECD SDMX
+- World Bank WDI
+- World Bank Global Economic Monitor
+- BEA public downloads / API
+- BLS series، با fallback بازتولیدپذیر از mirror رسمی FRED در محیط بدون API Key
+- OECD
 - IMF DataMapper
-- منابع دستی: Census BTOS، World Bank DAI، Stanford HAI
+- World Bank Digital Adoption Index
+- Census Business Trends and Outlook Survey
+- CSET / ETO Country AI Activity Metrics
+- Epoch AI
+- AIOE / AIIE exposure datasets
+
+## ایران
+
+ایران عمداً در Audit کشورها اجباری است و شیت‌های اختصاصی زیر دارد:
+
+- `Iran Data`
+- `Iran Coverage`
+- `Iran Digital Economy`
+- `Iran IPI Source Map`
+- `Iran Monetary Rates`
+
+در خروجی فعلی، داده‌های رسمی/منبع‌دار برای بخش بزرگی از متغیرهای کلیدی ایران موجود است. Industrial Production ایران هنوز یک شکاف واقعی است و به‌جای پر کردن مصنوعی، مسیرهای IMF PI، World Bank GEM و منبع داخلی در شیت `Iran IPI Source Map` مستند شده‌اند.
+
+## H1 تا H6
+
+شیت `Research Questions` نشان می‌دهد برای هر فرضیه چه داده‌ای موجود است و چه چیزی باقی مانده. شیت `Variable Index` نیز وضعیت هر متغیر را به‌صورت available / partial / missing ثبت می‌کند.
 
 ## اجرای محلی
 
@@ -32,25 +53,24 @@ pip install -r requirements.txt
 python collect_business_cycle_data.py
 ```
 
-برای FRED و BEA باید API Key تنظیم شود. BLS بدون کلید هم قابل استفاده است ولی محدودیت بیشتری دارد.
+API Keyها اختیاری‌اند. مسیرهای keyless برای FRED، BLS-origin series و BEA public downloads در نظر گرفته شده‌اند تا build در GitHub Actions قابل‌بازتولید بماند.
 
 ## GitHub Actions
 
-Workflow با نام `Collect Business Cycle Data` هنگام تغییر فایل‌های بخش data collection اجرا می‌شود و فایل Excel را به‌عنوان Artifact ذخیره می‌کند.
+Workflow با نام `Collect Business Cycle Data` فقط هنگام تغییر ورودی‌های اجرایی data collection اجرا می‌شود و workbook را به‌عنوان Artifact ذخیره می‌کند.
 
-برای کامل شدن خروجی، این GitHub Secrets را می‌توان اضافه کرد:
+Secrets اختیاری:
 
 - `FRED_API_KEY`
 - `BEA_API_KEY`
-- `BLS_API_KEY` (اختیاری)
+- `BLS_API_KEY`
 
-## مرحله بعد
+## اصل پژوهشی
 
-بعد از اینکه خروجی داده را گرفتیم:
+- Missing به صفر تبدیل نمی‌شود.
+- interpolation برای پر کردن شکاف‌های منبع انجام نمی‌شود.
+- forecast با observed قاطی نمی‌شود.
+- proxy با متغیر اصلی یکی فرض نمی‌شود.
+- تا قبل از دریافت specification دقیق استاد، estimator نهایی انتخاب نمی‌شود.
 
-1. شیت Collection Status را audit می‌کنیم.
-2. فرکانس ماهانه/فصلی/سالانه را تفکیک می‌کنیم.
-3. Track A و Track B را بر اساس پوشش واقعی داده طراحی می‌کنیم.
-4. سپس مدل اقتصادسنجی Python پیاده می‌شود.
-
-> فایل‌ها و نمونه‌های قدیمی TFP مبنای این پروژه نیستند.
+جزئیات آخرین اجرای اعتبارسنجی‌شده در `data_collection/RUN_STATUS.md` ثبت شده است.
