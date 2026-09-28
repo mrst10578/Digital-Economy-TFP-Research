@@ -268,6 +268,7 @@ def collect_fred(writer) -> None:
 # ---------------------------------------------------------------------------
 
 WORLDBANK_INDICATORS = {
+    "WB_Real_GDP_Level": "NY.GDP.MKTP.KD",
     "WB_Internet_Users_Percent": "IT.NET.USER.ZS",
     "WB_Fixed_Broadband_Per_100": "IT.NET.BBND.P2",
     "WB_R_and_D_Percent_GDP": "GB.XPD.RSDV.GD.ZS",
@@ -1044,7 +1045,7 @@ def collect_worldbank_dai(writer) -> None:
             # The current World Bank page renders the download control without
             # exposing the target href in the static HTML. This is the World Bank
             # file referenced for the same DAI long-form download.
-            file_url = "https://pubdocs.worldbank.org/en/625521534508595697/DAI-for-web.xlsx"
+            file_url = "https://thedocs.worldbank.org/en/doc/625521534508595697-0050022018/original/DAIforweb.xlsx"
         r = SESSION.get(file_url, timeout=REQUEST_TIMEOUT)
         r.raise_for_status()
         sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
@@ -1138,7 +1139,7 @@ MANUAL_SOURCES = [
 
 
 RESEARCH_REQUIREMENTS = [
-    ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; national accounts","US collected; Iran equivalent not yet collected","partial"],
+    ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; WDI NY.GDP.MKTP.KD","US + Iran + cross-country WDI level collected","available"],
     ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
     ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; national equivalents","US collected; Iran equivalent not yet collected","partial"],
     ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
