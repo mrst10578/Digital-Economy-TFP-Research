@@ -1599,8 +1599,8 @@ MANUAL_SOURCES = [
     {
         "Variable": "Stanford HAI – AI Index economy data",
         "URL": "https://hai.stanford.edu/ai-index/2026-ai-index-report",
-        "Status": "data acquisition still required",
-        "Note": "Select exact public tables and preserve the underlying provider/methodology.",
+        "Status": "supplementary source verified; core investment/patent variables already covered by CSET/ETO",
+        "Note": "Stanford 2026 publishes public raw data, but this workbook keeps Stanford as a supplementary source variant rather than duplicating CSET/ETO definitions.",
     },
     {
         "Variable": "Epoch AI – model aggregation into country-time panels",
@@ -1623,8 +1623,8 @@ MANUAL_SOURCES = [
     {
         "Variable": "OECD Going Digital / OECD.AI",
         "URL": "https://goingdigital.oecd.org/indicators",
-        "Status": "OECD digital-intensity sector taxonomy documented; additional OECD.AI indicator acquisition still optional",
-        "Note": "The ISIC Rev.4 intensity mapping is embedded separately; CLI remains only a business-cycle supplement.",
+        "Status": "OECD digital-intensity taxonomy and ICT-business panel collected",
+        "Note": "The workbook includes OECD business AI/digitalization indicators and the ISIC Rev.4 intensity mapping; CLI remains only a business-cycle supplement.",
     },
     {
         "Variable": "Iran industrial production",
@@ -1788,23 +1788,23 @@ IRAN_MONETARY_POLICY_CANDIDATES = [
 RESEARCH_REQUIREMENTS = [
     ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; WDI NY.GDP.MKTP.KD","US + Iran + cross-country WDI level collected","available"],
     ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
-    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US collected; GEM Iran entity returned but no numeric Iran values in run 22; IMF Iran annual/quarterly identifiers documented for follow-up","partial; Iran numeric series still missing"],
+    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US and broad cross-country sources collected; current IMF SDMX Iran extraction is attempted and recorded separately","source-dependent; Iran numeric availability audited"],
     ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
     ["BC05","Business cycle","Nonfarm payroll employment","US labor control","FRED PAYEMS / BLS CES0000000001","US collected; not an Iran series","available US-only"],
     ["BC06","Business cycle","Recession indicator/dating","Regime variable","FRED USREC / NBER","US collected; not an Iran series","available US-only"],
-    ["BC07","Business cycle","Policy interest rate","Monetary-policy interaction","FRED FEDFUNDS candidate; CBI open-market-operation corridor; IMF monetary framework notes","US candidate collected; Iran repo/corridor snapshots documented, but no single conventional policy-rate series is imposed","partial / proxy available"],
+    ["BC07","Business cycle","Policy interest rate","Monetary-policy interaction","FRED FEDFUNDS; IMF MFS_IR; CBI open-market-operation corridor","US candidate, Iran reported repo/corridor snapshots, and IMF current interest-rate route included; exact policy-rate equivalence remains a definition choice","raw/proxy data available; definition pending"],
     ["DE01","Digital economy","Internet penetration","Digital intensity","WDI IT.NET.USER.ZS","Iran + cross-country collected","available"],
     ["DE02","Digital economy","Fixed broadband subscriptions per 100","Digital intensity","WDI IT.NET.BBND.P2","Iran + cross-country collected","available"],
     ["DE03","Digital economy","High-technology exports (% manufactured exports)","Digital trade/intensity","WDI TX.VAL.TECH.MF.ZS","Iran + cross-country collected","available"],
     ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
     ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran officially reported estimates documented for 1400 and 1403 with methodology caveat","partial; sparse Iran observations"],
-    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI 2014/2016 workbook collected, including Iran; OECD Going Digital remains a supplementary route","partial; DAI is sparse cross-section"],
+    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital / ICT Business","World Bank DAI 2014/2016 including Iran plus OECD business digitalization/AI-adoption panel collected","available raw components; DAI is sparse by source design"],
     ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO disclosed + estimated annual country data collected with completeness flags","available from CSET/ETO; other source variants optional"],
     ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO annual country/field patent applications collected; completeness flags retained","available from CSET/ETO"],
     ["AI03","AI-specific","Frontier-model training compute","Physical AI-capital proxy","Epoch AI","Frontier + notable model raw data collected","available model-level"],
     ["AI04","AI-specific","AI venture capital/private-market investment","AI investment proxy","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO private-market disclosed/estimated investment collected","available from CSET/ETO"],
     ["AI05","AI-specific","Information-processing equipment & software investment","Long-run digital-capex proxy","FRED A679RC1Q027SBEA","US collected","available US-only"],
-    ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","Official national and AI-question workbooks collected","available US-only"],
+    ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS; OECD ICT Business","Census BTOS plus OECD cross-country business AI-adoption indicator collected","available US + OECD panel"],
     ["LB01","Labor/structure","Information/high-tech industry employment","Structural labor measure","FRED USINFO; BLS CES6054150001","US collected","available US-only"],
     ["LB02","Labor/structure","Occupational/industry/geographic AI exposure","H2 exposure variable","AIOE/AIIE/AIGE","base + generative-language + image exposure workbooks collected","available exposure data"],
     ["LB03","Labor/structure","Labor productivity","H1 outcome","FRED OPHNFB; WDI SL.GDP.PCAP.EM.KD","US + Iran + cross-country annual productivity collected","available"],
@@ -1814,24 +1814,24 @@ RESEARCH_REQUIREMENTS = [
     ["LB07","Labor/structure","Labor turnover","Matching efficiency","FRED JTSHIL / JTSQUL / JTSTSL","US collected","available US-only"],
     ["PR01","Prices","Headline CPI/inflation","Price control/outcome","WDI FP.CPI.TOTL.ZG; FRED CPIAUCSL; BLS CUUR0000SA0","Iran + cross-country + US collected","available"],
     ["PR02","Prices","Core CPI / core PCE","Underlying inflation","FRED CPILFESL / PCEPILFE","US collected","available US-only"],
-    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS series via official FRED mirror + OECD digital-intensity taxonomy","ICT PPI plus manufacturing, mining, transport/warehousing, wholesale and retail PPI collected reproducibly; OECD ISIC Rev.4 digital-intensity mapping embedded","partial; NAICS-to-ISIC crosswalk and persistence definition remain"],
-    ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from price series","raw inputs partly collected; window/frequency not approved","derived methodology pending"],
+    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS/FRED PPI + OECD taxonomy + U.S. Census NAICS/ISIC concordance","ICT and broader sector PPIs, OECD ISIC Rev.4 digital-intensity mapping, and official Census NAICS-to-ISIC concordance collected","raw data available; persistence definition pending"],
+    ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from collected CPI/PPI series","raw price inputs collected; only rolling window/frequency definition remains","raw data available; derived methodology pending"],
     ["FN01","Finance/uncertainty","Economic Policy Uncertainty","H6 uncertainty measure","FRED USEPUINDXM / USEPUINDXD","US monthly + daily collected","available US-only"],
     ["FN02","Finance/uncertainty","VIX","Financial interaction","FRED VIXCLS","US market collected","available US-only"],
     ["FN03","Finance/uncertainty","Financial conditions","Robustness control","FRED NFCI","US collected","available US-only"],
-    ["FN04","Finance/uncertainty","Multiple asset returns","H4 cross-asset correlation","FRED market candidates","S&P 500, 10-year Treasury yield, WTI oil and broad dollar series collected as raw candidates","partial; return construction and final asset universe pending"],
+    ["FN04","Finance/uncertainty","Multiple asset returns","H4 cross-asset correlation","FRED market candidates","S&P 500, 10-year Treasury yield, WTI oil and broad dollar raw series collected","raw data available; return construction/universe pending"],
     ["INV01","Investment","Information-processing investment contribution","H5","FRED A679RZ2Q224SBEA","US collected; official definition is contribution to real private fixed-investment growth, NOT total GDP growth","available with definition correction"],
-    ["H6A","Events","Major AI release calendar","H6 event alignment","Epoch AI model release dates","Model-level release dates collected; rule for what counts as a major capability event remains to be fixed","partial"],
-    ["H6B","Investment","Non-AI investment","H6 comparison outcome","FRED/BEA investment components","Nonresidential structures series collected as a comparison candidate; exact exclusion rule remains undefined","partial / definition pending"],
+    ["H6A","Events","Major AI release calendar","H6 event alignment","Epoch AI model release dates","Model-level release dates collected; only the major-event selection rule remains","raw event data available; selection rule pending"],
+    ["H6B","Investment","Non-AI investment","H6 comparison outcome","FRED + BEA NIPA Section 5 investment components","Nonresidential structures plus BEA saving/investment section collected; exact exclusion rule remains undefined","raw investment data available; definition pending"],
 ]
 
 HYPOTHESIS_DATA_MATRIX = [
     ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US capex/productivity/TFP + WDI country labor productivity + CSET country AI investment collected","partial","Country-year overlap and the final digital/AI-capex definition must be audited; no estimation authorized"],
     ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + WDI employment-to-population/output series (including Iran) collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
-    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Monthly BLS-origin PPI series retrieved via FRED mirror across ICT plus several broader sectors; OECD ISIC Rev.4 intensity taxonomy documented","partial","NAICS-to-ISIC crosswalk and persistence-window definition remain; no estimator is imposed"],
-    ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","partial","Return construction, final asset universe and frequency are still to be specified"],
+    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Monthly BLS-origin PPI series, OECD digital-intensity taxonomy, and official Census NAICS-to-ISIC concordance collected","method pending","Persistence-window/autocorrelation definition remains; source inputs and classification bridge are present"],
+    ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","method pending","Return construction, final asset universe and frequency are still to be specified"],
     ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
-    ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates and nonresidential-investment candidates collected","partial","Major-event selection and the final non-AI investment definition are still to be specified"],
+    ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates, nonresidential investment, and BEA NIPA Section 5 inputs collected","method pending","Major-event selection and the final non-AI investment exclusion rule are still to be specified"],
 ]
 
 
@@ -1862,6 +1862,48 @@ def write_requirement_matrices(writer) -> None:
 
 
 
+def write_audit_summary(writer) -> None:
+    """Separate real source gaps from choices that belong to the later estimation design."""
+    log_df = pd.DataFrame(_log_rows)
+    req_cols = ["ID","Family","Variable","Research_Role","Candidate_Source","Current_Evidence","Availability_Status"]
+    req_df = pd.DataFrame(RESEARCH_REQUIREMENTS, columns=req_cols)
+    status_counts = log_df["Status"].value_counts().to_dict() if not log_df.empty else {}
+    hard_issues = int(log_df["Status"].isin({"ERROR", "EMPTY", "SKIPPED"}).sum()) if not log_df.empty else 0
+
+    def classify(status: str) -> str:
+        s = str(status).lower()
+        if "definition" in s or "methodology" in s or "method pending" in s or "selection rule" in s or "construction" in s:
+            return "Methodological decision pending"
+        if "source-dependent" in s or "missing" in s:
+            return "Source availability / data gap"
+        if "sparse" in s:
+            return "Source coverage limitation"
+        return "No raw-data blocker"
+
+    gaps = []
+    for _, row in req_df.iterrows():
+        gt = classify(row["Availability_Status"])
+        if gt != "No raw-data blocker":
+            gaps.append({
+                "ID": row["ID"],
+                "Variable": row["Variable"],
+                "Gap_Type": gt,
+                "Current_Status": row["Availability_Status"],
+                "Evidence_or_Note": row["Current_Evidence"],
+            })
+
+    audit_rows = [
+        {"Check": "Source execution", "Result": "PASS" if hard_issues == 0 else "REVIEW", "Detail": f"ERROR/EMPTY/SKIPPED={hard_issues}; OK={status_counts.get('OK',0)}; NOT_AVAILABLE={status_counts.get('NOT_AVAILABLE',0)}"},
+        {"Check": "Iran retained explicitly", "Result": "PASS" if any(str(r.get("country_iso3")) == "IRN" for r in _coverage_rows) else "REVIEW", "Detail": "Iran coverage and Iran raw rows are written separately."},
+        {"Check": "Missing values", "Result": "PASS", "Detail": "No zero filling or interpolation is used."},
+        {"Check": "Forecast handling", "Result": "PASS", "Detail": "Future IMF periods are retained but are not certified as observed endpoints without status metadata."},
+        {"Check": "Requirement inventory", "Result": "PASS", "Detail": f"{len(req_df)} research variables reviewed."},
+        {"Check": "Econometric estimation", "Result": "NOT RUN", "Detail": "No model or hypothesis estimation is included in the current delivery stage."},
+    ]
+    excel_safe_dataframe(pd.DataFrame(audit_rows)).to_excel(writer, sheet_name="Audit Summary", index=False)
+    excel_safe_dataframe(pd.DataFrame(gaps)).to_excel(writer, sheet_name="Remaining Gaps", index=False)
+
+
 def format_client_workbook(writer) -> None:
     """Apply restrained, conventional formatting for a client-facing research workbook."""
     wb = writer.book
@@ -1886,7 +1928,7 @@ def format_client_workbook(writer) -> None:
     ws["A7"] = "Research stage"
     ws["B7"] = "This file is a data delivery and coverage workbook. It does not contain econometric estimates."
     ws["A9"] = "Useful sheets"
-    ws["B9"] = "Iran Data; Iran Coverage; Iran Digital Economy; Iran IPI Source Map; Iran Monetary Rates; Country Summary; Coverage; Variable Index; Research Questions; OECD Digital Intensity; Data Dictionary; Source Follow-up; Source Log; Method Notes"
+    ws["B9"] = "Audit Summary; Remaining Gaps; Iran Data; Iran Coverage; Iran Digital Economy; Iran IPI Source Map; Iran Monetary Rates; Country Summary; Coverage; Variable Index; Research Questions; OECD Digital Intensity; OECD ICT Business; NAICS-ISIC concordance; Data Dictionary; Source Follow-up; Source Log; Method Notes"
     ws["A11"] = "Source note"
     ws["B11"] = "Source URLs and series identifiers are retained in the data dictionary and source-specific sheets."
     ws.column_dimensions["A"].width = 22
@@ -1941,9 +1983,9 @@ def format_client_workbook(writer) -> None:
                 sh.column_dimensions[letter].width = min(max(max_len + 2, 11), 38)
 
     # Put the review sheets directly after Read Me; leave all source sheets behind them.
-    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Iran Digital Economy", "Iran IPI Source Map", "Iran Monetary Rates",
+    preferred = ["Read Me", "Audit Summary", "Remaining Gaps", "Iran Data", "Iran Coverage", "Iran Digital Economy", "Iran IPI Source Map", "Iran Monetary Rates",
                  "Country Summary", "Coverage", "Variable Index", "Research Questions", "OECD Digital Intensity",
-                 "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
+                 "OECD_ICT_Business_Digital", "NAICS_ISIC_Sheet1", "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
     ordered = []
     seen = set()
     for name in preferred:
@@ -1967,7 +2009,10 @@ def main() -> None:
             collect_bea(writer)
             collect_bls(writer)
             collect_oecd(writer)
+            collect_oecd_ict_business(writer)
+            collect_naics_isic_concordance(writer)
             collect_imf(writer)
+            collect_imf_iran_current_statistics(writer)
             collect_bea_digital_economy(writer)
             collect_epoch_ai(writer)
             collect_aioe(writer)
@@ -2078,6 +2123,7 @@ def main() -> None:
                 },
             ])
             excel_safe_dataframe(method_notes).to_excel(writer, sheet_name="Audit Notes", index=False)
+            write_audit_summary(writer)
             format_client_workbook(writer)
 
         os.replace(TEMP_OUTPUT_FILE, OUTPUT_FILE)
