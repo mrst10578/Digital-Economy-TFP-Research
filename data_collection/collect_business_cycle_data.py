@@ -43,7 +43,7 @@ def log(name: str, source: str, status: str, detail: str = "") -> None:
 
 
 def safe_sheet_name(name: str) -> str:
-    for ch in "[]:*?/\":
+    for ch in '[]:*?/\\':
         name = name.replace(ch, "")
     return name[:31]
 
