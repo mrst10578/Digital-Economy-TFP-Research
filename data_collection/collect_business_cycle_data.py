@@ -171,7 +171,11 @@ FRED_SERIES = {
     "Information_Sector_Employment": "USINFO",
     "JOLTS_Job_Openings_Total": "JTSJOL",
     "JOLTS_Prof_Business_Services": "JTS540099JOL",
+    "JOLTS_Hires_Total": "JTSHIL",
+    "JOLTS_Quits_Total": "JTSQUL",
+    "JOLTS_Total_Separations": "JTSTSL",
     "Labor_Productivity_NonfarmBiz": "OPHNFB",
+    "Unit_Labor_Cost_NonfarmBiz": "ULCNFB",
     "Total_Factor_Productivity": "MFPPBS",
     "CPI_Headline": "CPIAUCSL",
     "CPI_Core": "CPILFESL",
@@ -780,6 +784,59 @@ def collect_aioe(writer) -> None:
 
 
 # ---------------------------------------------------------------------------
+# CSET / ETO Country AI Activity Metrics
+# ---------------------------------------------------------------------------
+
+CSET_ETO_FILES = {
+    "CSET_AI_Patent_Applications": "patents_yearly_applications.csv",
+    "CSET_AI_Investment_Disclosed": "companies_yearly_disclosed.csv",
+    "CSET_AI_Investment_Estimated": "companies_yearly_estimated.csv",
+}
+CSET_ETO_RECORD = "https://zenodo.org/records/22772306/files/{filename}?download=1"
+register(
+    "CSET_AI_Patent_Applications",
+    "CSET / ETO Country AI Activity Metrics",
+    "patents_yearly_applications.csv",
+    "Cross-country",
+    "Annual",
+    "AI patent filings",
+    "Recent patent years can be materially incomplete; retain the source complete flag.",
+)
+register(
+    "CSET_AI_Investment_Disclosed",
+    "CSET / ETO Country AI Activity Metrics",
+    "companies_yearly_disclosed.csv",
+    "Cross-country",
+    "Annual",
+    "private-market AI investment",
+    "Millions USD; equity investment into privately held AI-related companies.",
+)
+register(
+    "CSET_AI_Investment_Estimated",
+    "CSET / ETO Country AI Activity Metrics",
+    "companies_yearly_estimated.csv",
+    "Cross-country",
+    "Annual",
+    "estimated private-market AI investment",
+    "Millions USD; preserve the source complete flag and distinguish estimated from disclosed values.",
+)
+
+
+def collect_cset_eto(writer) -> None:
+    print("\n--- CSET / ETO Country AI Activity ---")
+    for name, filename in CSET_ETO_FILES.items():
+        try:
+            url = CSET_ETO_RECORD.format(filename=filename)
+            r = SESSION.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            r.raise_for_status()
+            df = pd.read_csv(io.BytesIO(r.content))
+            write_sheet(writer, df, name, "CSET / ETO")
+        except Exception as exc:
+            log(name, "CSET / ETO", "ERROR", str(exc))
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+
+# ---------------------------------------------------------------------------
 # Manual / not-yet-automated sources
 # ---------------------------------------------------------------------------
 
@@ -829,6 +886,67 @@ MANUAL_SOURCES = [
 ]
 
 
+RESEARCH_REQUIREMENTS = [
+    ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; national accounts","US collected; Iran equivalent not yet collected","partial"],
+    ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
+    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; national equivalents","US collected; Iran equivalent not yet collected","partial"],
+    ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
+    ["BC05","Business cycle","Nonfarm payroll employment","US labor control","FRED PAYEMS / BLS CES0000000001","US collected; not an Iran series","available US-only"],
+    ["BC06","Business cycle","Recession indicator/dating","Regime variable","FRED USREC / NBER","US collected; not an Iran series","available US-only"],
+    ["BC07","Business cycle","Policy interest rate","Monetary-policy interaction","FRED FEDFUNDS candidate; national central banks","US candidate collected; exact country-equivalent definition pending","partial / definition pending"],
+    ["DE01","Digital economy","Internet penetration","Digital intensity","WDI IT.NET.USER.ZS","Iran + cross-country collected","available"],
+    ["DE02","Digital economy","Fixed broadband subscriptions per 100","Digital intensity","WDI IT.NET.BBND.P2","Iran + cross-country collected","available"],
+    ["DE03","Digital economy","High-technology exports (% manufactured exports)","Digital trade/intensity","WDI TX.VAL.TECH.MF.ZS","Iran + cross-country collected","available"],
+    ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
+    ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran equivalent not yet found","partial"],
+    ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","sources verified; exact raw tables not yet automated","missing raw data"],
+    ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO collection attempted in current run; see Collection Status","source-dependent"],
+    ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO collection attempted in current run; preserve completeness flags","source-dependent"],
+    ["AI03","AI-specific","Frontier-model training compute","Physical AI-capital proxy","Epoch AI","Frontier + notable model raw data collected","available model-level"],
+    ["AI04","AI-specific","AI venture capital/private-market investment","AI investment proxy","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO collection attempted in current run","source-dependent"],
+    ["AI05","AI-specific","Information-processing equipment & software investment","Long-run digital-capex proxy","FRED A679RC1Q027SBEA","US collected","available US-only"],
+    ["AI06","AI-specific","Business AI use/adoption","High-frequency adoption","US Census BTOS","official download verified; exact raw AI supplement file not yet automated","missing raw data"],
+    ["LB01","Labor/structure","Information/high-tech industry employment","Structural labor measure","FRED USINFO; BLS CES6054150001","US collected","available US-only"],
+    ["LB02","Labor/structure","Occupational/industry/geographic AI exposure","H2 exposure variable","AIOE/AIIE/AIGE","base + generative-language + image exposure workbooks collected","available exposure data"],
+    ["LB03","Labor/structure","Labor productivity","H1 outcome","FRED OPHNFB","US collected","available US-only"],
+    ["LB04","Labor/structure","Total factor productivity","H1 outcome","FRED MFPPBS","US collected","available US-only"],
+    ["LB05","Labor/structure","Unit labor costs","Cost/price mechanism","FRED ULCNFB","US collected","available US-only"],
+    ["LB06","Labor/structure","Job openings","Matching efficiency","FRED JTSJOL / JTS540099JOL","US collected","available US-only"],
+    ["LB07","Labor/structure","Labor turnover","Matching efficiency","FRED JTSHIL / JTSQUL / JTSTSL","US collected","available US-only"],
+    ["PR01","Prices","Headline CPI/inflation","Price control/outcome","WDI FP.CPI.TOTL.ZG; FRED CPIAUCSL; BLS CUUR0000SA0","Iran + cross-country + US collected","available"],
+    ["PR02","Prices","Core CPI / core PCE","Underlying inflation","FRED CPILFESL / PCEPILFE","US collected","available US-only"],
+    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series","sector universe/mapping not approved yet","definition pending / missing"],
+    ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from price series","raw inputs partly collected; window/frequency not approved","derived methodology pending"],
+    ["FN01","Finance/uncertainty","Economic Policy Uncertainty","H6 uncertainty measure","FRED USEPUINDXM / USEPUINDXD","US monthly + daily collected","available US-only"],
+    ["FN02","Finance/uncertainty","VIX","Financial interaction","FRED VIXCLS","US market collected","available US-only"],
+    ["FN03","Finance/uncertainty","Financial conditions","Robustness control","FRED NFCI","US collected","available US-only"],
+    ["FN04","Finance/uncertainty","Multiple asset returns","H4 cross-asset correlation","financial-market source TBD","asset universe/frequency not specified in research document","definition pending / missing"],
+    ["INV01","Investment","Information-processing investment contribution","H5","FRED A679RZ2Q224SBEA","US collected; official definition is contribution to real private fixed-investment growth, NOT total GDP growth","available with definition correction"],
+    ["H6A","Events","Major AI release calendar","H6 event alignment","verified event sources TBD","not collected; event definition/calendar must be fixed first","definition pending / missing"],
+    ["H6B","Investment","Non-AI investment","H6 comparison outcome","BEA/FRED component series TBD","not collected; exact exclusion rule for AI/digital investment is undefined","definition pending / missing"],
+]
+
+HYPOTHESIS_DATA_MATRIX = [
+    ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US raw capex/productivity/TFP collected","partially data-ready","Cross-country capex/productivity equivalents still needed; no estimation authorized"],
+    ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE raw exposure collected","partially data-ready","Compatible historical employment/output crosswalk still needed"],
+    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Aggregate prices collected","not data-ready","Sector universe, sectoral price data and digital-intensity mapping still missing"],
+    ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX and capex collected","not data-ready","VIX alone is insufficient; asset universe/frequency not defined"],
+    ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partially data-ready","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
+    ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","Daily/monthly EPU collected","not data-ready","Verified event calendar and non-AI investment definition/data missing"],
+]
+
+
+def write_requirement_matrices(writer) -> None:
+    req_cols = ["ID","Family","Variable","Research_Role","Candidate_Source","Current_Evidence","Availability_Status"]
+    hyp_cols = ["Hypothesis","Question","Required_Data","Current_Evidence","Data_Readiness","Remaining_Gap"]
+    excel_safe_dataframe(pd.DataFrame(RESEARCH_REQUIREMENTS, columns=req_cols)).to_excel(
+        writer, sheet_name="Requirements Matrix", index=False
+    )
+    excel_safe_dataframe(pd.DataFrame(HYPOTHESIS_DATA_MATRIX, columns=hyp_cols)).to_excel(
+        writer, sheet_name="Hypothesis Matrix", index=False
+    )
+
+
 def main() -> None:
     print("=" * 78)
     print("Starting revised data collection and coverage audit")
@@ -845,6 +963,8 @@ def main() -> None:
             collect_bea_digital_economy(writer)
             collect_epoch_ai(writer)
             collect_aioe(writer)
+            collect_cset_eto(writer)
+            write_requirement_matrices(writer)
 
             excel_safe_dataframe(pd.DataFrame(MANUAL_SOURCES)).to_excel(
                 writer, sheet_name="Manual Sources", index=False
