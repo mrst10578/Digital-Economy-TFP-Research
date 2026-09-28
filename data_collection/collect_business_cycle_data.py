@@ -886,6 +886,73 @@ def collect_oecd(writer) -> None:
         log("OECD_Composite_Leading_Indicator", "OECD", "ERROR", str(exc))
 
 
+register(
+    "OECD_ICT_Business_Digitalization",
+    "OECD ICT Access and Usage by Businesses",
+    "OECD.STI.DEP:DSD_ICT_B@DF_BUSINESSES(1.0)",
+    "OECD/accession/key-partner economies",
+    "Annual",
+    "cross-country business digitalization and AI adoption",
+    "Measures: G14_B AI use, B1_B website, G13_B IoT, A3E_B broadband speed; enterprises with 10+ employees.",
+)
+
+
+def collect_oecd_ict_business(writer) -> None:
+    print("\n--- OECD ICT business digitalization ---")
+    url = (
+        "https://sdmx.oecd.org/public/rest/data/"
+        "OECD.STI.DEP,DSD_ICT_B@DF_BUSINESSES,1.0/"
+        ".A.G14_B+B1_B+G13_B+A3E_B.PT_ENT._T.S_GE10"
+    )
+    try:
+        r = SESSION.get(
+            url,
+            params={
+                "startPeriod": "2012",
+                "dimensionAtObservation": "AllDimensions",
+                "format": "csvfilewithlabels",
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        df = pd.read_csv(io.StringIO(r.text), low_memory=False)
+        write_sheet(writer, df, "OECD_ICT_Business_Digital", "OECD ICT Access and Usage by Businesses")
+    except Exception as exc:
+        log("OECD_ICT_Business_Digital", "OECD ICT", "ERROR", str(exc))
+
+
+register(
+    "NAICS_to_ISIC_Rev4_Concordance",
+    "U.S. Census Bureau",
+    "2012 NAICS to ISIC Rev. 4",
+    "US/international classification bridge",
+    "",
+    "H3 sector mapping support",
+    "Official Census concordance. Later NAICS revisions must be reviewed where affected.",
+)
+
+
+def collect_naics_isic_concordance(writer) -> None:
+    print("\n--- Census NAICS / ISIC concordance ---")
+    url = "https://www2.census.gov/library/reference/naics/technical-documentation/concordance/2012_naics_to_isic_4.xls"
+    try:
+        r = SESSION.get(url, timeout=REQUEST_TIMEOUT)
+        r.raise_for_status()
+        sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None, engine="xlrd")
+        total = 0
+        for sheet_name, df in sheets.items():
+            if df is None or df.empty:
+                continue
+            write_sheet(writer, df, f"NAICS_ISIC_{sheet_name}", "U.S. Census Bureau concordance")
+            total += len(df)
+        if total:
+            log("NAICS-to-ISIC Rev.4 concordance", "U.S. Census Bureau", "OK", f"{total} rows")
+        else:
+            log("NAICS-to-ISIC Rev.4 concordance", "U.S. Census Bureau", "EMPTY")
+    except Exception as exc:
+        log("NAICS-to-ISIC Rev.4 concordance", "U.S. Census Bureau", "ERROR", str(exc))
+
+
 # ---------------------------------------------------------------------------
 # IMF DataMapper
 # ---------------------------------------------------------------------------
