@@ -1,0 +1,42 @@
+name: Collect Business Cycle Data
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data_collection/**"
+      - ".github/workflows/collect-data.yml"
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r data_collection/requirements.txt
+
+      - name: Collect data
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          BEA_API_KEY: ${{ secrets.BEA_API_KEY }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}
+        run: |
+          cd data_collection
+          python collect_business_cycle_data.py
+
+      - name: Upload Excel workbook
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-cycle-data
+          path: data_collection/AI_Digital_Economy_BusinessCycle_Data.xlsx
+          if-no-files-found: error
