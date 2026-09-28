@@ -3,9 +3,18 @@
 Phase 1 data collector for:
 Digital Economy, Artificial Intelligence, and Business Cycle Dynamics
 
-This collector is based on the project files supplied by the client.
-It gathers public/official series and writes them into one Excel workbook.
-Sources that require API keys are skipped cleanly when the key is absent.
+Revision 2 (2026-09-28)
+- keeps Iran in cross-country auditing;
+- removes the artificial World Bank 2000 start-year floor;
+- paginates World Bank responses and labels countries vs aggregates;
+- adds missing WDI digital indicators from the research document;
+- uses an official FRED CSV fallback when no FRED API key is configured;
+- chunks BLS history instead of discarding older observations;
+- uses IMF AI Preparedness indicator AI_PI rather than dataset name AIPI;
+- uses BEA's latest Digital Economy 2017-2022 workbook;
+- writes coverage, Iran data, source dictionary, and collection status to Excel.
+
+This script collects and audits data only. It does not run econometric models.
 """
 
 from __future__ import annotations
@@ -17,29 +26,68 @@ from datetime import datetime
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 OUTPUT_FILE = "AI_Digital_Economy_BusinessCycle_Data.xlsx"
-START_YEAR = 2000
+TEMP_OUTPUT_FILE = OUTPUT_FILE + ".tmp.xlsx"
 END_YEAR = datetime.now().year
-REQUEST_TIMEOUT = 45
-SLEEP_BETWEEN_CALLS = 0.5
+REQUEST_TIMEOUT = 60
+SLEEP_BETWEEN_CALLS = 0.25
+RETRIEVED_AT = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 FRED_API_KEY = os.environ.get("FRED_API_KEY", "")
 BEA_API_KEY = os.environ.get("BEA_API_KEY", "")
 BLS_API_KEY = os.environ.get("BLS_API_KEY", "")
 
 _log_rows: list[dict] = []
+_coverage_rows: list[dict] = []
+_iran_rows: list[dict] = []
+_dictionary_rows: list[dict] = []
+
+retry = Retry(
+    total=3,
+    connect=3,
+    read=3,
+    backoff_factor=1.0,
+    status_forcelist=(429, 500, 502, 503, 504),
+    allowed_methods=frozenset({"GET", "POST"}),
+)
+SESSION = requests.Session()
+SESSION.mount("https://", HTTPAdapter(max_retries=retry))
 
 
-def log(name: str, source: str, status: str, detail: str = "") -> None:
+def log(name: str, source: str, status: str, detail: str = "", rows: int | None = None) -> None:
     _log_rows.append({
         "Variable": name,
         "Source": source,
         "Status": status,
+        "Rows": rows,
         "Detail": detail,
+        "Retrieved_At": RETRIEVED_AT,
     })
     suffix = f" ({detail})" if detail else ""
     print(f"[{status}] {source} :: {name}{suffix}")
+
+
+def register(
+    variable_name: str,
+    source: str,
+    series_id: str,
+    geography: str,
+    frequency: str = "",
+    requirement_role: str = "",
+    note: str = "",
+) -> None:
+    _dictionary_rows.append({
+        "Variable": variable_name,
+        "Source": source,
+        "Series_ID": series_id,
+        "Geography": geography,
+        "Frequency_Hint": frequency,
+        "Requirement_Role": requirement_role,
+        "Note": note,
+    })
 
 
 def safe_sheet_name(name: str) -> str:
@@ -53,8 +101,40 @@ def write_sheet(writer, df: pd.DataFrame | None, name: str, source: str) -> None
         log(name, source, "EMPTY")
         return
     df.to_excel(writer, sheet_name=safe_sheet_name(name), index=False)
-    log(name, source, "OK", f"{len(df)} rows")
+    log(name, source, "OK", f"{len(df)} rows", len(df))
 
+
+def numeric_valid(series: pd.Series) -> pd.Series:
+    return pd.to_numeric(series, errors="coerce").notna()
+
+
+def add_iran_long_rows(
+    df: pd.DataFrame,
+    source: str,
+    series_id: str,
+    period_col: str,
+    value_col: str,
+    country_col: str,
+    observation_status: str,
+) -> None:
+    if country_col not in df.columns:
+        return
+    subset = df[df[country_col].astype(str) == "IRN"].copy()
+    for _, row in subset.iterrows():
+        _iran_rows.append({
+            "source": source,
+            "series_id": series_id,
+            "country_iso3": "IRN",
+            "period": row.get(period_col),
+            "value": row.get(value_col),
+            "observation_status": observation_status,
+            "retrieved_at": RETRIEVED_AT,
+        })
+
+
+# ---------------------------------------------------------------------------
+# FRED
+# ---------------------------------------------------------------------------
 
 FRED_SERIES = {
     "Real_GDP_Level": "GDPC1",
@@ -68,6 +148,7 @@ FRED_SERIES = {
     "VIX_Volatility_Index": "VIXCLS",
     "OECD_CLI_United_States": "USALOLITONOSTSAM",
     "Info_Processing_Equip_Software_Inv": "A679RC1Q027SBEA",
+    "Info_Processing_Inv_Contribution": "A679RZ2Q224SBEA",
     "Computer_Systems_Design_Employment": "CES6054150001",
     "Information_Sector_Employment": "USINFO",
     "JOLTS_Job_Openings_Total": "JTSJOL",
@@ -77,100 +158,253 @@ FRED_SERIES = {
     "CPI_Headline": "CPIAUCSL",
     "CPI_Core": "CPILFESL",
     "PCE_Price_Index": "PCEPI",
+    "PCE_Core": "PCEPILFE",
+    "Economic_Policy_Uncertainty_Monthly": "USEPUINDXM",
+    "Economic_Policy_Uncertainty_Daily": "USEPUINDXD",
+    "National_Financial_Conditions_Index": "NFCI",
+    "Effective_Federal_Funds_Rate_Candidate": "FEDFUNDS",
 }
+
+for _name, _sid in FRED_SERIES.items():
+    _note = ""
+    if _sid == "A679RZ2Q224SBEA":
+        _note = "Official definition: contribution to percent change in real private fixed investment, not contribution to total GDP growth."
+    if _sid == "FEDFUNDS":
+        _note = "Candidate policy-rate proxy for U.S.; exact policy-rate specification remains a research-design choice."
+    register(_name, "FRED", _sid, "US", requirement_role="research-document or supporting U.S. series", note=_note)
+
+
+def fetch_fred_series(series_id: str) -> pd.DataFrame:
+    if FRED_API_KEY:
+        r = SESSION.get(
+            "https://api.stlouisfed.org/fred/series/observations",
+            params={
+                "series_id": series_id,
+                "api_key": FRED_API_KEY,
+                "file_type": "json",
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        obs = r.json().get("observations", [])
+        df = pd.DataFrame(obs)
+        if df.empty:
+            return df
+        df = df[["date", "value"]].rename(columns={"date": "Date", "value": series_id})
+    else:
+        # Official FRED graph CSV endpoint does not require an API key.
+        r = SESSION.get(
+            "https://fred.stlouisfed.org/graph/fredgraph.csv",
+            params={"id": series_id},
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        df = pd.read_csv(io.StringIO(r.text))
+        if "DATE" in df.columns:
+            df = df.rename(columns={"DATE": "Date"})
+        if series_id not in df.columns:
+            raise ValueError(f"FRED CSV did not contain expected column {series_id}")
+        df = df[["Date", series_id]]
+    df[series_id] = pd.to_numeric(df[series_id], errors="coerce")
+    return df
 
 
 def collect_fred(writer) -> None:
     print("\n--- FRED ---")
-    if not FRED_API_KEY:
-        log("All FRED series", "FRED", "SKIPPED", "FRED_API_KEY not set")
-        return
-
-    url = "https://api.stlouisfed.org/fred/series/observations"
+    mode = "API" if FRED_API_KEY else "official keyless CSV fallback"
     for name, series_id in FRED_SERIES.items():
         try:
-            r = requests.get(
-                url,
-                params={
-                    "series_id": series_id,
-                    "api_key": FRED_API_KEY,
-                    "file_type": "json",
-                    "observation_start": f"{START_YEAR}-01-01",
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            r.raise_for_status()
-            obs = r.json().get("observations", [])
-            df = pd.DataFrame(obs)
-            if not df.empty:
-                df = df[["date", "value"]].rename(
-                    columns={"date": "Date", "value": series_id}
-                )
-                df[series_id] = pd.to_numeric(df[series_id], errors="coerce")
-            write_sheet(writer, df, name, "FRED")
+            df = fetch_fred_series(series_id)
+            write_sheet(writer, df, name, f"FRED ({mode})")
         except Exception as exc:
             log(name, "FRED", "ERROR", str(exc))
         time.sleep(SLEEP_BETWEEN_CALLS)
 
 
+# ---------------------------------------------------------------------------
+# World Bank WDI
+# ---------------------------------------------------------------------------
+
 WORLDBANK_INDICATORS = {
     "WB_Internet_Users_Percent": "IT.NET.USER.ZS",
+    "WB_Fixed_Broadband_Per_100": "IT.NET.BBND.P2",
+    "WB_R_and_D_Percent_GDP": "GB.XPD.RSDV.GD.ZS",
+    "WB_HighTech_Manufactured_Exports": "TX.VAL.TECH.MF.ZS",
     "WB_GDP_Growth_Annual_Percent": "NY.GDP.MKTP.KD.ZG",
     "WB_Unemployment_Percent": "SL.UEM.TOTL.ZS",
     "WB_Inflation_CPI_Percent": "FP.CPI.TOTL.ZG",
     "WB_ICT_Service_Exports_Percent": "BX.GSR.CCIS.ZS",
 }
 
+for _name, _sid in WORLDBANK_INDICATORS.items():
+    _note = ""
+    if _sid == "BX.GSR.CCIS.ZS":
+        _note = "Optional separate metric. It is not a substitute for high-technology manufactured export share."
+    register(_name, "World Bank WDI", _sid, "Cross-country", "Annual", "research-document / supporting cross-country series", _note)
+
+
+def fetch_worldbank_entity_metadata() -> tuple[pd.DataFrame, dict[str, dict]]:
+    r = SESSION.get(
+        "https://api.worldbank.org/v2/country",
+        params={"format": "json", "per_page": 400},
+        timeout=REQUEST_TIMEOUT,
+    )
+    r.raise_for_status()
+    payload = r.json()
+    records = payload[1] if isinstance(payload, list) and len(payload) >= 2 and payload[1] else []
+    rows = []
+    mapping: dict[str, dict] = {}
+    for item in records:
+        iso3 = item.get("id", "")
+        region = (item.get("region") or {})
+        income = (item.get("incomeLevel") or {})
+        lending = (item.get("lendingType") or {})
+        entity_type = "aggregate" if region.get("id") == "NA" else "country"
+        row = {
+            "ISO3": iso3,
+            "ISO2": item.get("iso2Code", ""),
+            "Entity_Name": item.get("name", ""),
+            "Entity_Type": entity_type,
+            "Region_ID": region.get("id", ""),
+            "Region": region.get("value", ""),
+            "Income_Level": income.get("value", ""),
+            "Lending_Type": lending.get("value", ""),
+        }
+        rows.append(row)
+        mapping[iso3] = row
+    return pd.DataFrame(rows), mapping
+
+
+def fetch_worldbank_indicator(code: str, entity_meta: dict[str, dict]) -> pd.DataFrame:
+    page = 1
+    rows = []
+    while True:
+        r = SESSION.get(
+            f"https://api.worldbank.org/v2/country/all/indicator/{code}",
+            params={"format": "json", "per_page": 20000, "page": page},
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        payload = r.json()
+        if not isinstance(payload, list) or len(payload) < 2:
+            raise ValueError("Unexpected World Bank response structure")
+        meta = payload[0] or {}
+        data = payload[1] or []
+        rows.extend(data)
+        pages = int(meta.get("pages", 1) or 1)
+        if page >= pages:
+            break
+        page += 1
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+    df = pd.json_normalize(rows)
+    if df.empty:
+        return df
+    keep = [
+        c for c in ["country.value", "countryiso3code", "date", "value"]
+        if c in df.columns
+    ]
+    df = df[keep].rename(columns={
+        "country.value": "Country",
+        "countryiso3code": "ISO3",
+        "date": "Year",
+        "value": code,
+    })
+    df["Year"] = pd.to_numeric(df["Year"], errors="coerce").astype("Int64")
+    df[code] = pd.to_numeric(df[code], errors="coerce")
+    df["Entity_Type"] = df["ISO3"].map(lambda x: entity_meta.get(str(x), {}).get("Entity_Type", "unknown"))
+    df["Region"] = df["ISO3"].map(lambda x: entity_meta.get(str(x), {}).get("Region", ""))
+    df["Income_Level"] = df["ISO3"].map(lambda x: entity_meta.get(str(x), {}).get("Income_Level", ""))
+    return df
+
+
+def add_worldbank_coverage(df: pd.DataFrame, name: str, code: str) -> None:
+    if df.empty:
+        return
+    for iso3, group in df.groupby("ISO3", dropna=False):
+        valid = group[numeric_valid(group[code])].copy()
+        entity_type = str(group["Entity_Type"].iloc[0]) if "Entity_Type" in group.columns else "unknown"
+        if valid.empty:
+            _coverage_rows.append({
+                "variable_id": code,
+                "variable_name": name,
+                "country_iso3": iso3,
+                "entity_type": entity_type,
+                "source": "World Bank WDI",
+                "series_id": code,
+                "frequency": "annual",
+                "first_valid_period": None,
+                "last_valid_period": None,
+                "valid_observations": 0,
+                "expected_periods": None,
+                "missing_periods": None,
+                "coverage_percent": None,
+                "observation_status": "no numeric value returned",
+                "availability_status": "missing in returned source data",
+                "notes": "",
+                "retrieved_at": RETRIEVED_AT,
+            })
+            continue
+        years = pd.to_numeric(valid["Year"], errors="coerce").dropna().astype(int)
+        first = int(years.min())
+        last = int(years.max())
+        expected = last - first + 1
+        valid_count = int(years.nunique())
+        missing = max(expected - valid_count, 0)
+        _coverage_rows.append({
+            "variable_id": code,
+            "variable_name": name,
+            "country_iso3": iso3,
+            "entity_type": entity_type,
+            "source": "World Bank WDI",
+            "series_id": code,
+            "frequency": "annual",
+            "first_valid_period": first,
+            "last_valid_period": last,
+            "valid_observations": valid_count,
+            "expected_periods": expected,
+            "missing_periods": missing,
+            "coverage_percent": valid_count / expected if expected else None,
+            "observation_status": "observed source values",
+            "availability_status": "available",
+            "notes": "Coverage is based on numeric values, not merely first/last rows.",
+            "retrieved_at": RETRIEVED_AT,
+        })
+
 
 def collect_worldbank(writer) -> None:
     print("\n--- World Bank ---")
+    entity_df, entity_meta = fetch_worldbank_entity_metadata()
+    write_sheet(writer, entity_df, "WorldBank_Entity_Metadata", "World Bank")
     for name, code in WORLDBANK_INDICATORS.items():
         try:
-            r = requests.get(
-                f"https://api.worldbank.org/v2/country/all/indicator/{code}",
-                params={
-                    "format": "json",
-                    "per_page": 20000,
-                    "date": f"{START_YEAR}:{END_YEAR}",
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            r.raise_for_status()
-            payload = r.json()
-            df = pd.DataFrame()
-            if isinstance(payload, list) and len(payload) >= 2 and payload[1]:
-                df = pd.json_normalize(payload[1])
-                keep = [
-                    c for c in
-                    ["country.value", "countryiso3code", "date", "value"]
-                    if c in df.columns
-                ]
-                df = df[keep].rename(columns={
-                    "country.value": "Country",
-                    "countryiso3code": "ISO3",
-                    "date": "Year",
-                    "value": code,
-                })
+            df = fetch_worldbank_indicator(code, entity_meta)
             write_sheet(writer, df, name, "World Bank")
+            add_worldbank_coverage(df, name, code)
+            add_iran_long_rows(df, "World Bank WDI", code, "Year", code, "ISO3", "observed source value")
         except Exception as exc:
             log(name, "World Bank", "ERROR", str(exc))
         time.sleep(SLEEP_BETWEEN_CALLS)
 
 
+# ---------------------------------------------------------------------------
+# BEA NIPA (optional API key)
+# ---------------------------------------------------------------------------
+
 BEA_TABLES = {
     "BEA_RealGDP_PercentChange_T10101": "T10101",
 }
+register("BEA_RealGDP_PercentChange_T10101", "BEA NIPA", "T10101", "US", "Quarterly", "supporting U.S. GDP data")
 
 
 def collect_bea(writer) -> None:
-    print("\n--- BEA ---")
+    print("\n--- BEA NIPA ---")
     if not BEA_API_KEY:
-        log("All BEA tables", "BEA", "SKIPPED", "BEA_API_KEY not set")
+        log("All BEA NIPA tables", "BEA", "SKIPPED", "BEA_API_KEY not set; FRED/other official sources remain available")
         return
-
     for name, table in BEA_TABLES.items():
         try:
-            r = requests.get(
+            r = SESSION.get(
                 "https://apps.bea.gov/api/data",
                 params={
                     "UserID": BEA_API_KEY,
@@ -184,12 +418,19 @@ def collect_bea(writer) -> None:
                 timeout=REQUEST_TIMEOUT,
             )
             r.raise_for_status()
-            data = r.json().get("BEAAPI", {}).get("Results", {}).get("Data", [])
+            result = r.json().get("BEAAPI", {}).get("Results", {})
+            if "Error" in result:
+                raise ValueError(str(result["Error"]))
+            data = result.get("Data", [])
             write_sheet(writer, pd.DataFrame(data), name, "BEA")
         except Exception as exc:
             log(name, "BEA", "ERROR", str(exc))
         time.sleep(SLEEP_BETWEEN_CALLS)
 
+
+# ---------------------------------------------------------------------------
+# BLS - chunked history
+# ---------------------------------------------------------------------------
 
 BLS_SERIES = {
     "BLS_Unemployment_Rate": "LNS14000000",
@@ -197,46 +438,75 @@ BLS_SERIES = {
     "BLS_CPI_All_Items": "CUUR0000SA0",
     "BLS_Computer_Systems_Design_Emp": "CES6054150001",
 }
+for _name, _sid in BLS_SERIES.items():
+    register(_name, "BLS", _sid, "US", "Monthly", "research-document / supporting labor-price series")
+
+# 1913 is the earliest start among the currently configured BLS series set (CPI).
+# It is a source-specific floor, not a project-wide research start year.
+BLS_HISTORY_START = 1913
 
 
 def collect_bls(writer) -> None:
     print("\n--- BLS ---")
     span = 20 if BLS_API_KEY else 10
-    start_year = max(START_YEAR, END_YEAR - span + 1)
+    by_series: dict[str, list[dict]] = {sid: [] for sid in BLS_SERIES.values()}
 
-    body = {
-        "seriesid": list(BLS_SERIES.values()),
-        "startyear": str(start_year),
-        "endyear": str(END_YEAR),
-    }
-    if BLS_API_KEY:
-        body["registrationKey"] = BLS_API_KEY
+    chunk_start = BLS_HISTORY_START
+    while chunk_start <= END_YEAR:
+        chunk_end = min(chunk_start + span - 1, END_YEAR)
+        body = {
+            "seriesid": list(BLS_SERIES.values()),
+            "startyear": str(chunk_start),
+            "endyear": str(chunk_end),
+        }
+        if BLS_API_KEY:
+            body["registrationKey"] = BLS_API_KEY
 
-    try:
-        r = requests.post(
-            "https://api.bls.gov/publicAPI/v2/timeseries/data/",
-            json=body,
-            headers={"Content-type": "application/json"},
-            timeout=REQUEST_TIMEOUT,
-        )
-        r.raise_for_status()
-        payload = r.json()
-        if payload.get("status") != "REQUEST_SUCCEEDED":
-            log("All BLS series", "BLS", "ERROR", str(payload.get("message", "")))
-            return
-
-        id_to_name = {v: k for k, v in BLS_SERIES.items()}
-        for series in payload.get("Results", {}).get("series", []):
-            sid = series.get("seriesID", "")
-            name = id_to_name.get(sid, sid)
-            write_sheet(
-                writer,
-                pd.DataFrame(series.get("data", [])),
-                name,
-                "BLS",
+        try:
+            r = SESSION.post(
+                "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+                json=body,
+                headers={"Content-type": "application/json"},
+                timeout=REQUEST_TIMEOUT,
             )
-    except Exception as exc:
-        log("All BLS series", "BLS", "ERROR", str(exc))
+            r.raise_for_status()
+            payload = r.json()
+            if payload.get("status") != "REQUEST_SUCCEEDED":
+                raise ValueError(str(payload.get("message", "")))
+            for series in payload.get("Results", {}).get("series", []):
+                sid = series.get("seriesID", "")
+                if sid in by_series:
+                    by_series[sid].extend(series.get("data", []))
+        except Exception as exc:
+            log(f"BLS chunk {chunk_start}-{chunk_end}", "BLS", "ERROR", str(exc))
+        chunk_start = chunk_end + 1
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+    id_to_name = {v: k for k, v in BLS_SERIES.items()}
+    for sid, rows in by_series.items():
+        name = id_to_name[sid]
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            if "year" in df.columns and "period" in df.columns:
+                df = df.drop_duplicates(subset=["year", "period"], keep="first")
+                df = df.sort_values(["year", "period"], ascending=[False, False])
+            if "value" in df.columns:
+                df["value_numeric"] = pd.to_numeric(df["value"], errors="coerce")
+        write_sheet(writer, df, name, "BLS")
+
+
+# ---------------------------------------------------------------------------
+# OECD supplementary CLI
+# ---------------------------------------------------------------------------
+
+register(
+    "OECD_Composite_Leading_Indicator",
+    "OECD",
+    "OECD.SDD.STES,DSD_STES@DF_CLI",
+    "OECD/selected areas",
+    "Monthly",
+    "supplementary business-cycle indicator; NOT a substitute for Going Digital/OECD.AI metrics",
+)
 
 
 def collect_oecd(writer) -> None:
@@ -246,10 +516,9 @@ def collect_oecd(writer) -> None:
             "https://sdmx.oecd.org/public/rest/data/"
             "OECD.SDD.STES,DSD_STES@DF_CLI/.M.LI...AA...H"
         )
-        r = requests.get(
+        r = SESSION.get(
             url,
             params={
-                "startPeriod": "2000-01",
                 "dimensionAtObservation": "AllDimensions",
                 "format": "csvfilewithlabels",
             },
@@ -262,102 +531,260 @@ def collect_oecd(writer) -> None:
         log("OECD_Composite_Leading_Indicator", "OECD", "ERROR", str(exc))
 
 
+# ---------------------------------------------------------------------------
+# IMF DataMapper
+# ---------------------------------------------------------------------------
+
 IMF_INDICATORS = {
-    "IMF_AI_Preparedness_Index": "AIPI",
+    "IMF_AI_Preparedness_Index": "AI_PI",
     "IMF_Real_GDP_Growth": "NGDP_RPCH",
     "IMF_Inflation_Percent": "PCPIPCH",
 }
+register("IMF_AI_Preparedness_Index", "IMF DataMapper / AIPI", "AI_PI", "Cross-country", "2023 snapshot", "AI preparedness; not AI investment/adoption")
+register("IMF_Real_GDP_Growth", "IMF DataMapper / WEO", "NGDP_RPCH", "Cross-country", "Annual", "macro control/outcome")
+register("IMF_Inflation_Percent", "IMF DataMapper / WEO", "PCPIPCH", "Cross-country", "Annual", "macro price control")
+
+
+def add_imf_coverage(df: pd.DataFrame, name: str, code: str) -> None:
+    if df.empty:
+        return
+    for country, group in df.groupby("Country_Code", dropna=False):
+        valid = group[numeric_valid(group[code])]
+        if valid.empty:
+            continue
+        years = pd.to_numeric(valid["Year"], errors="coerce").dropna().astype(int)
+        returned_first = int(years.min())
+        returned_last = int(years.max())
+        # DataMapper output here does not carry a reliable actual/estimate/forecast flag.
+        # To avoid calling future values observed history, leave last_valid_period blank.
+        _coverage_rows.append({
+            "variable_id": code,
+            "variable_name": name,
+            "country_iso3": country,
+            "entity_type": "country_or_imf_entity",
+            "source": "IMF DataMapper",
+            "series_id": code,
+            "frequency": "annual_or_snapshot",
+            "first_valid_period": returned_first,
+            "last_valid_period": None,
+            "valid_observations": int(len(valid)),
+            "expected_periods": None,
+            "missing_periods": None,
+            "coverage_percent": None,
+            "observation_status": "returned periods; actual/estimate/forecast status not retained",
+            "availability_status": "available but observed endpoint unresolved",
+            "notes": f"Returned through {returned_last}; do not treat returned endpoint as last observed year.",
+            "retrieved_at": RETRIEVED_AT,
+        })
 
 
 def collect_imf(writer) -> None:
     print("\n--- IMF ---")
     for name, code in IMF_INDICATORS.items():
         try:
-            r = requests.get(
+            r = SESSION.get(
                 f"https://www.imf.org/external/datamapper/api/v1/{code}",
                 timeout=REQUEST_TIMEOUT,
             )
             r.raise_for_status()
             values = r.json().get("values", {}).get(code, {})
-            records = [
-                {"Country_Code": country, "Year": year, code: value}
-                for country, year_map in values.items()
-                for year, value in year_map.items()
-            ]
-            write_sheet(writer, pd.DataFrame(records), name, "IMF")
+            records = []
+            for country, year_map in values.items():
+                for year, value in year_map.items():
+                    try:
+                        y = int(year)
+                    except Exception:
+                        y = year
+                    period_flag = (
+                        "future_year_returned"
+                        if isinstance(y, int) and y > END_YEAR
+                        else "current_or_historical_year_returned"
+                    )
+                    records.append({
+                        "Country_Code": country,
+                        "Year": y,
+                        code: value,
+                        "Period_Flag": period_flag,
+                    })
+            df = pd.DataFrame(records)
+            if not df.empty:
+                df[code] = pd.to_numeric(df[code], errors="coerce")
+            write_sheet(writer, df, name, "IMF")
+            add_imf_coverage(df, name, code)
+            add_iran_long_rows(
+                df,
+                "IMF DataMapper",
+                code,
+                "Year",
+                code,
+                "Country_Code",
+                "returned; actual/estimate/forecast classification not retained",
+            )
         except Exception as exc:
             log(name, "IMF", "ERROR", str(exc))
         time.sleep(SLEEP_BETWEEN_CALLS)
 
 
-DIRECT_DOWNLOAD_FILES = {
-    "BEA_Digital_Economy_Satellite_Acct": (
-        "https://www.bea.gov/system/files/2019-04/"
-        "digital-economy-tables-april-2019.xlsx"
-    )
-}
+# ---------------------------------------------------------------------------
+# BEA Digital Economy latest official workbook
+# ---------------------------------------------------------------------------
+
+BEA_DIGITAL_ECONOMY_URL = (
+    "https://bea.gov/sites/default/files/2023-12/"
+    "DigitalEconomy_2017-2022.xlsx"
+)
+register(
+    "BEA_Digital_Economy_Satellite_Account",
+    "BEA Digital Economy",
+    "2017-2022 official workbook",
+    "US",
+    "Annual",
+    "digital economy share/output/value added; account discontinued after 2023 release",
+)
 
 
-def collect_direct_downloads(writer) -> None:
-    print("\n--- Direct downloads ---")
-    for name, url in DIRECT_DOWNLOAD_FILES.items():
-        try:
-            r = requests.get(url, timeout=REQUEST_TIMEOUT)
-            r.raise_for_status()
-            sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
-            df = next(iter(sheets.values()))
-            write_sheet(writer, df, name, "Direct download")
-        except Exception as exc:
-            log(name, "Direct download", "ERROR", str(exc))
+def collect_bea_digital_economy(writer) -> None:
+    print("\n--- BEA Digital Economy ---")
+    try:
+        r = SESSION.get(BEA_DIGITAL_ECONOMY_URL, timeout=REQUEST_TIMEOUT)
+        r.raise_for_status()
+        sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
+        wrote = 0
+        for idx, (sheet_name, df) in enumerate(sheets.items(), start=1):
+            if df is None or df.empty:
+                continue
+            out_name = f"BEA_DE_{idx:02d}_{sheet_name}"
+            write_sheet(writer, df, out_name, "BEA Digital Economy 2017-2022")
+            wrote += 1
+        if wrote == 0:
+            log("BEA_Digital_Economy", "BEA Digital Economy", "EMPTY", "Workbook contained no non-empty sheets")
+    except Exception as exc:
+        log("BEA_Digital_Economy", "BEA Digital Economy", "ERROR", str(exc))
 
+
+# ---------------------------------------------------------------------------
+# Manual / not-yet-automated sources
+# ---------------------------------------------------------------------------
 
 MANUAL_SOURCES = [
     {
         "Variable": "Census BTOS – AI use by businesses",
         "URL": "https://www.census.gov/programs-surveys/btos.html",
-        "Note": "Biweekly CSV files; direct file path changes by release.",
+        "Status": "data acquisition still required",
+        "Note": "Biweekly AI-use supplement; preserve question/version, sector, geography and sample metadata.",
     },
     {
         "Variable": "World Bank – Digital Adoption Index",
         "URL": "https://www.worldbank.org/en/publication/wdr2016/Digital-Adoption-Index",
-        "Note": "Download XLSX manually; only 2014 and 2016.",
+        "Status": "data acquisition still required",
+        "Note": "Sparse cross-section (not an annual panel); do not interpolate into fake yearly observations.",
     },
     {
-        "Variable": "Stanford HAI – AI Index",
-        "URL": "https://hai.stanford.edu/ai-index/2026-ai-index-report/economy",
-        "Note": "Report/public data; not a stable API.",
+        "Variable": "Stanford HAI – AI Index economy data",
+        "URL": "https://hai.stanford.edu/ai-index/2026-ai-index-report",
+        "Status": "data acquisition still required",
+        "Note": "Select exact public tables and preserve the underlying provider/methodology.",
+    },
+    {
+        "Variable": "Epoch AI – Notable AI Models",
+        "URL": "https://epoch.ai/data/notable-ai-models",
+        "Status": "data acquisition still required",
+        "Note": "Model-level data; country attribution and aggregation require an explicit methodology.",
+    },
+    {
+        "Variable": "CSET / ETO Country Activity Tracker",
+        "URL": "https://cat.eto.tech/",
+        "Status": "data acquisition still required",
+        "Note": "Candidate source for AI patents/research/investment; verify exact table and lag.",
+    },
+    {
+        "Variable": "AIOE / AIIE / AIGE",
+        "URL": "https://github.com/AIOE-Data/AIOE",
+        "Status": "data acquisition still required",
+        "Note": "Needed with compatible SOC/NAICS employment histories for H2.",
+    },
+    {
+        "Variable": "OECD Going Digital / OECD.AI",
+        "URL": "https://goingdigital.oecd.org/indicators",
+        "Status": "data acquisition still required",
+        "Note": "Current OECD CLI collection is supplementary and does not satisfy this requirement.",
     },
 ]
 
 
 def main() -> None:
-    print("=" * 72)
-    print("Starting data collection")
-    print("=" * 72)
+    print("=" * 78)
+    print("Starting revised data collection and coverage audit")
+    print("=" * 78)
 
-    with pd.ExcelWriter(OUTPUT_FILE, engine="openpyxl") as writer:
-        collect_fred(writer)
-        collect_worldbank(writer)
-        collect_bea(writer)
-        collect_bls(writer)
-        collect_oecd(writer)
-        collect_imf(writer)
-        collect_direct_downloads(writer)
+    try:
+        with pd.ExcelWriter(TEMP_OUTPUT_FILE, engine="openpyxl") as writer:
+            collect_fred(writer)
+            collect_worldbank(writer)
+            collect_bea(writer)
+            collect_bls(writer)
+            collect_oecd(writer)
+            collect_imf(writer)
+            collect_bea_digital_economy(writer)
 
-        pd.DataFrame(MANUAL_SOURCES).to_excel(
-            writer,
-            sheet_name="Manual Sources",
-            index=False,
-        )
-        pd.DataFrame(_log_rows).to_excel(
-            writer,
-            sheet_name="Collection Status",
-            index=False,
-        )
+            pd.DataFrame(MANUAL_SOURCES).to_excel(
+                writer, sheet_name="Manual Sources", index=False
+            )
 
-    print("=" * 72)
+            coverage_df = pd.DataFrame(_coverage_rows)
+            if not coverage_df.empty:
+                coverage_df.to_excel(writer, sheet_name="Coverage", index=False)
+                iran_cov = coverage_df[
+                    coverage_df["country_iso3"].astype(str) == "IRN"
+                ].copy()
+                iran_cov.to_excel(writer, sheet_name="Iran Coverage", index=False)
+
+            iran_df = pd.DataFrame(_iran_rows)
+            if not iran_df.empty:
+                iran_df.to_excel(writer, sheet_name="Iran Data", index=False)
+
+            pd.DataFrame(_dictionary_rows).drop_duplicates().to_excel(
+                writer, sheet_name="Variable Dictionary", index=False
+            )
+            pd.DataFrame(_log_rows).to_excel(
+                writer, sheet_name="Collection Status", index=False
+            )
+
+            audit_notes = pd.DataFrame([
+                {
+                    "Rule": "Iran mandatory",
+                    "Implementation": "IRN is audited explicitly in Iran Data / Iran Coverage; U.S.-only series are never relabeled as Iran.",
+                },
+                {
+                    "Rule": "No fixed project-wide start year",
+                    "Implementation": "World Bank and FRED request full returned history; BLS uses a source-specific 1913 floor covering the currently configured series set.",
+                },
+                {
+                    "Rule": "Forecasts do not extend observed history",
+                    "Implementation": "IMF returned future periods are retained with flags, but last_valid_period is intentionally not certified without source status metadata.",
+                },
+                {
+                    "Rule": "No synthetic completeness",
+                    "Implementation": "Missing values remain missing; no interpolation or zero filling is performed.",
+                },
+                {
+                    "Rule": "Econometrics deferred",
+                    "Implementation": "No hypothesis test or model estimation is executed by this collector.",
+                },
+            ])
+            audit_notes.to_excel(writer, sheet_name="Audit Notes", index=False)
+
+        os.replace(TEMP_OUTPUT_FILE, OUTPUT_FILE)
+    finally:
+        if os.path.exists(TEMP_OUTPUT_FILE):
+            try:
+                os.remove(TEMP_OUTPUT_FILE)
+            except OSError:
+                pass
+
+    print("=" * 78)
     print(f"Finished: {OUTPUT_FILE}")
-    print("=" * 72)
+    print("=" * 78)
 
 
 if __name__ == "__main__":
