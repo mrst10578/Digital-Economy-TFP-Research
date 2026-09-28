@@ -1,61 +1,62 @@
 # وضعیت اجرای جمع‌آوری داده
 
-آخرین اجرای موفق: GitHub Actions run #2
+آخرین نسخه‌ی اعتبارسنجی‌شده: **GitHub Actions run #23**  
+تاریخ اجرا: **28 September 2026**
 
 ## نتیجه
 
-فایل `AI_Digital_Economy_BusinessCycle_Data.xlsx` با موفقیت ساخته شد و به‌عنوان Artifact ذخیره شد.
+فایل `AI_Digital_Economy_BusinessCycle_Data.xlsx` با موفقیت ساخته شد. این نسخه یک بسته‌ی داده و Audit است و **هیچ برآورد اقتصاد‌سنجی در آن اجرا نشده است**.
 
-### داده‌های دریافت‌شده
+### خلاصه خروجی
 
-| منبع | متغیر | وضعیت | تعداد ردیف |
-|---|---|---:|---:|
-| World Bank | Internet Users (%) | OK | 6,890 |
-| World Bank | GDP Growth | OK | 6,890 |
-| World Bank | Unemployment | OK | 6,890 |
-| World Bank | CPI Inflation | OK | 6,890 |
-| World Bank | ICT Service Exports | OK | 6,890 |
-| BLS | Unemployment Rate | OK | 116 |
-| BLS | Total Nonfarm Payrolls | OK | 116 |
-| BLS | CPI All Items | OK | 116 |
-| BLS | Computer Systems Design Employment | OK | 116 |
-| OECD | Composite Leading Indicator | OK | 7,040 |
-| IMF | Real GDP Growth | OK | 10,914 |
-| IMF | Inflation | OK | 10,789 |
+- تعداد شیت‌ها: **132**
+- وضعیت Source Log: **126 مورد OK و 0 خطا**
+- ایران در `Country Summary` به‌عنوان کشور اجباری مشخص شده است.
+- داده‌های ایران برای GDP، بهره‌وری نیروی کار، اشتغال، اینترنت، broadband، R&D، صادرات high-tech، تورم، بیکاری، AI Preparedness، AI patents، AI investment و DAI نگه‌داری شده‌اند.
+- داده‌های BLS در اجرای بدون API Key از mirror رسمی FRED خوانده می‌شوند تا محدودیت روزانه‌ی BLS باعث افت کیفیت اجرای CI نشود.
+- برای H3 علاوه بر صنایع ICT، PPI ماهانه‌ی manufacturing، mining، transportation/warehousing، wholesale و retail نیز جمع‌آوری شده است.
+- طبقه‌بندی شدت دیجیتال OECD بر اساس ISIC Rev.4 داخل workbook قرار دارد.
+- سهم گزارش‌شده‌ی اقتصاد دیجیتال ایران برای سال‌های 1400 و 1403 به‌صورت sparse و بدون interpolation ثبت شده است.
+- نرخ‌های عملیاتی repo و corridor ایران به‌عنوان proxy مستند شده‌اند و به‌عنوان یک policy rate یکتای قطعی معرفی نشده‌اند.
 
-## موارد ناقص
+## شکاف مهم باقی‌مانده
 
-- FRED: اجرا نشده چون `FRED_API_KEY` هنوز در GitHub Secrets تنظیم نشده است.
-- BEA API: اجرا نشده چون `BEA_API_KEY` هنوز تنظیم نشده است.
-- IMF AI Preparedness Index (AIPI): پاسخ API فعلی خالی بوده و باید جداگانه بررسی شود.
-- BEA Digital Economy Satellite Account: لینک مستقیم موجود در فایل اولیه با خطای 404 مواجه شده و باید منبع فعلی آن بررسی شود.
-- Census BTOS، World Bank DAI و Stanford HAI همچنان در گروه منابع دستی هستند.
+**Industrial Production ایران هنوز به‌صورت عددی بسته نشده است.**
 
-## شیت‌های فایل Excel
+- World Bank GEM ایران را به‌عنوان entity برمی‌گرداند، اما در استخراج فعلی برای ایران مقدار عددی IPI ندارد.
+- شناسه‌های IMF Production Indexes برای ایران مستند شده‌اند:
+  - `IRN.IND.IX.A` سالانه
+  - `IRN.IND.IX.Q` فصلی
+- این شناسه‌ها از مسیر IMF/IFS و یک mirror مشتق‌شده از IMF شناسایی شده‌اند، اما تا زمانی که یک مسیر بازتولیدپذیر برای دریافت مستقیم مقادیر عددی پیدا نشود، این شکاف **پرشده تلقی نمی‌شود**.
+- شیت `Iran IPI Source Map` دقیقاً وضعیت این مسیرها را ثبت می‌کند.
 
-فایل خروجی فعلی ۱۴ شیت دارد:
+## شیت‌های کنترلی اصلی
 
-1. WB_Internet_Users_Percent
-2. WB_GDP_Growth_Annual_Percent
-3. WB_Unemployment_Percent
-4. WB_Inflation_CPI_Percent
-5. WB_ICT_Service_Exports_Percent
-6. BLS_Unemployment_Rate
-7. BLS_Total_Nonfarm_Payrolls
-8. BLS_CPI_All_Items
-9. BLS_Computer_Systems_Design_Emp
-10. OECD_Composite_Leading_Indicato
-11. IMF_Real_GDP_Growth
-12. IMF_Inflation_Percent
-13. Manual Sources
-14. Collection Status
+1. `Read Me`
+2. `Iran Data`
+3. `Iran Coverage`
+4. `Iran Digital Economy`
+5. `Iran IPI Source Map`
+6. `Iran Monetary Rates`
+7. `Country Summary`
+8. `Coverage`
+9. `Variable Index`
+10. `Research Questions`
+11. `OECD Digital Intensity`
+12. `Data Dictionary`
+13. `Method Notes`
+14. `Source Follow-up`
+15. `Source Log`
+
+## وضعیت فرضیه‌ها
+
+H1 تا H6 هنوز در وضعیت **partial** هستند. دلیل این وضعیت در شیت `Research Questions` برای هر فرضیه جداگانه نوشته شده است. هیچ داده‌ی گمشده‌ای با interpolation یا داده‌ی ساختگی پر نشده است.
 
 ## مرحله بعد
 
-قبل از هر برآورد اقتصادسنجی:
+قبل از برآورد:
 
-1. تکمیل FRED و BEA با API Key.
-2. تعیین تکلیف AIPI و لینک BEA.
-3. بررسی پوشش زمانی، فرکانس و missing values هر سری.
-4. تفکیک داده‌ها برای Track A (آمریکا، فرکانس بالا) و Track B (پنل سالانه بین‌کشوری).
-5. فقط بعد از این مرحله، ساخت دیتاست تحلیلی و مدل Python.
+1. در صورت امکان مسیر مستقیم و قابل‌بازتولید IMF/CBI/PRC برای IPI ایران تکمیل شود.
+2. crosswalk نهایی NAICS به ISIC برای H3 تصویب شود.
+3. تعریف دقیق متغیرهای model و specification استاد دریافت شود.
+4. سپس دیتاست تحلیلی از این workbook ساخته شود و برآورد Python آغاز شود.
