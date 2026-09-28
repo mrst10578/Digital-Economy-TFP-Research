@@ -1,39 +1,56 @@
-# Digital Economy × TFP Research
+# AI, Digital Economy & Business Cycle Dynamics
 
-پروژه تحلیل اقتصادسنجی برای بررسی اقتصاد دیجیتال و بهره‌وری کل عوامل تولید با مسیر اجرای Python و پرتال پژوهشی خودکار.
+این ریپو مربوط به پروژه اصلی بررسی اثر اقتصاد دیجیتال و هوش مصنوعی بر پویایی چرخه‌های تجاری است.
 
-## وضعیت فعلی
+## فاز فعلی: جمع‌آوری داده
 
-زیرساخت Python، کنترل کیفیت داده، آماده‌سازی داده، خروجی‌های پایه و پرتال پژوهش آماده‌اند. مدل نهایی عمداً قطعی نشده است چون طبق توضیح کارفرما، مدل موردنظر استاد با فرم موجود در مقاله یکسان نیست.
+در این مرحله هنوز سراغ برآورد نهایی نمی‌رویم. اول باید داده‌های موردنیاز از منابع رسمی جمع شوند، پوشش زمانی و فرکانس آن‌ها مشخص شود و کیفیت هر سری بررسی شود.
 
-## معماری پروژه
+اسکریپت فاز اول در مسیر زیر قرار دارد:
 
-- `src/config.py`: قرارداد داده و مسیرهای پروژه
-- `src/data_check.py`: کنترل کیفیت داده
-- `src/prepare_data.py`: پاک‌سازی و آماده‌سازی
-- `src/model_template.py`: محل پیاده‌سازی مدل استاد
-- `src/dashboard_export.py`: تبدیل خروجی تحلیل به داده قابل نمایش در پرتال
-- `run_analysis.py`: pipeline اصلی تحلیل
-- `site/`: پرتال پژوهش
-- `tests/smoke_test.py`: تست سریع زیرساخت
-- `.github/workflows/quality.yml`: کنترل خودکار کیفیت Python
-- `.github/workflows/pages.yml`: ساخت و انتشار خودکار پرتال
+`data_collection/collect_business_cycle_data.py`
 
-## پرتال پژوهش
+خروجی:
 
-پرتال فقط صفحه وضعیت نیست. ساختار آن برای نمایش audit داده، مشخصات مدل، ضرایب، آزمون‌های تشخیصی و نمودارهای واقعی طراحی شده است. تا زمانی که داده و مدل واقعی وارد نشوند، این بخش‌ها به صورت empty state باقی می‌مانند و عدد ساختگی نمایش داده نمی‌شود.
+`AI_Digital_Economy_BusinessCycle_Data.xlsx`
+
+## منابع فعلی
+
+- FRED
+- World Bank Open Data
+- BEA
+- BLS
+- OECD SDMX
+- IMF DataMapper
+- منابع دستی: Census BTOS، World Bank DAI، Stanford HAI
 
 ## اجرای محلی
 
 ```bash
+cd data_collection
 pip install -r requirements.txt
-python tests/smoke_test.py
-python run_analysis.py
-python -m src.dashboard_export
+python collect_business_cycle_data.py
 ```
 
-برای اجرای pipeline روی داده واقعی، فایل `dataset.csv` داخل `data/raw/` قرار می‌گیرد.
+برای FRED و BEA باید API Key تنظیم شود. BLS بدون کلید هم قابل استفاده است ولی محدودیت بیشتری دارد.
 
-## Research integrity
+## GitHub Actions
 
-داده‌های پوشه `demo/` مصنوعی و فقط برای تست فنی هستند. هیچ عددی از آن‌ها نباید به عنوان یافته پژوهش گزارش شود.
+Workflow با نام `Collect Business Cycle Data` هنگام تغییر فایل‌های بخش data collection اجرا می‌شود و فایل Excel را به‌عنوان Artifact ذخیره می‌کند.
+
+برای کامل شدن خروجی، این GitHub Secrets را می‌توان اضافه کرد:
+
+- `FRED_API_KEY`
+- `BEA_API_KEY`
+- `BLS_API_KEY` (اختیاری)
+
+## مرحله بعد
+
+بعد از اینکه خروجی داده را گرفتیم:
+
+1. شیت Collection Status را audit می‌کنیم.
+2. فرکانس ماهانه/فصلی/سالانه را تفکیک می‌کنیم.
+3. Track A و Track B را بر اساس پوشش واقعی داده طراحی می‌کنیم.
+4. سپس مدل اقتصادسنجی Python پیاده می‌شود.
+
+> فایل‌ها و نمونه‌های قدیمی TFP مبنای این پروژه نیستند.
