@@ -289,6 +289,21 @@ for _name, _sid in WORLDBANK_INDICATORS.items():
         _note = "Optional separate metric. It is not a substitute for high-technology manufactured export share."
     register(_name, "World Bank WDI", _sid, "Cross-country", "Annual", "research-document / supporting cross-country series", _note)
 
+WORLDBANK_GEM_INDICATORS = {
+    "WB_GEM_Industrial_Production_SA": "IPTOTSAKD",
+    "WB_GEM_Industrial_Production_NSA": "IPTOTNSKD",
+}
+for _name, _sid in WORLDBANK_GEM_INDICATORS.items():
+    register(
+        _name,
+        "World Bank Global Economic Monitor (GEM)",
+        _sid,
+        "Cross-country",
+        "Monthly/annual as returned by GEM",
+        "industrial-production activity measure",
+        "Official GEM series; source id 15 in the World Bank API.",
+    )
+
 
 def fetch_worldbank_entity_metadata() -> tuple[pd.DataFrame, dict[str, dict]]:
     r = SESSION.get(
@@ -461,6 +476,122 @@ def collect_worldbank(writer) -> None:
             add_iran_long_rows(df, "World Bank WDI", code, "Year", code, "ISO3", "observed source value")
         except Exception as exc:
             log(name, "World Bank", "ERROR", str(exc))
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+
+# ---------------------------------------------------------------------------
+# World Bank Global Economic Monitor (GEM)
+# ---------------------------------------------------------------------------
+
+def _gem_period_key(value):
+    text_value = str(value)
+    m = re.match(r"^(\d{4})(?:M(\d{1,2})|Q(\d))?$", text_value)
+    if not m:
+        return (9999, 99, text_value)
+    year = int(m.group(1))
+    month = int(m.group(2)) if m.group(2) else (int(m.group(3)) * 3 if m.group(3) else 0)
+    return (year, month, text_value)
+
+
+def fetch_worldbank_gem_indicator(code: str, entity_meta: dict[str, dict]) -> pd.DataFrame:
+    page = 1
+    rows = []
+    while True:
+        r = SESSION.get(
+            f"https://api.worldbank.org/v2/country/all/indicator/{code}",
+            params={
+                "source": 15,
+                "format": "json",
+                "per_page": 20000,
+                "page": page,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        r.raise_for_status()
+        payload = r.json()
+        if not isinstance(payload, list) or len(payload) < 2:
+            raise ValueError("Unexpected World Bank GEM response structure")
+        meta = payload[0] or {}
+        data = payload[1] or []
+        rows.extend(data)
+        pages = int(meta.get("pages", 1) or 1)
+        if page >= pages:
+            break
+        page += 1
+        time.sleep(SLEEP_BETWEEN_CALLS)
+
+    df = pd.json_normalize(rows)
+    if df.empty:
+        return df
+    keep = [
+        col for col in ["country.value", "countryiso3code", "date", "value"]
+        if col in df.columns
+    ]
+    df = df[keep].rename(columns={
+        "country.value": "Country",
+        "countryiso3code": "ISO3",
+        "date": "Period",
+        "value": code,
+    })
+    df[code] = pd.to_numeric(df[code], errors="coerce")
+    df["Entity_Type"] = df["ISO3"].map(
+        lambda x: entity_meta.get(str(x), {}).get("Entity_Type", "unknown")
+    )
+    return df
+
+
+def add_worldbank_gem_coverage(df: pd.DataFrame, name: str, code: str) -> None:
+    if df.empty:
+        return
+    for iso3, group in df.groupby("ISO3", dropna=False):
+        valid = group[numeric_valid(group[code])].copy()
+        if valid.empty:
+            continue
+        periods = sorted(valid["Period"].astype(str).unique().tolist(), key=_gem_period_key)
+        entity_type = str(group["Entity_Type"].iloc[0]) if "Entity_Type" in group.columns else "unknown"
+        _coverage_rows.append({
+            "variable_id": code,
+            "variable_name": name,
+            "country_iso3": iso3,
+            "entity_type": entity_type,
+            "source": "World Bank GEM",
+            "series_id": code,
+            "frequency": "mixed GEM period labels",
+            "first_valid_period": periods[0],
+            "last_valid_period": periods[-1],
+            "valid_observations": len(periods),
+            "expected_periods": None,
+            "missing_periods": None,
+            "coverage_percent": None,
+            "longest_contiguous_start": None,
+            "longest_contiguous_end": None,
+            "observation_status": "official source values",
+            "comparability_status": "constant-US$ industrial-production series; inspect frequency/base metadata before estimation",
+            "availability_status": "available",
+            "notes": "World Bank Global Economic Monitor, source=15.",
+            "retrieved_at": RETRIEVED_AT,
+        })
+
+
+def collect_worldbank_gem(writer) -> None:
+    print("\n--- World Bank GEM ---")
+    _, entity_meta = fetch_worldbank_entity_metadata()
+    for name, code in WORLDBANK_GEM_INDICATORS.items():
+        try:
+            df = fetch_worldbank_gem_indicator(code, entity_meta)
+            write_sheet(writer, df, name, "World Bank GEM")
+            add_worldbank_gem_coverage(df, name, code)
+            add_iran_long_rows(
+                df,
+                "World Bank GEM",
+                code,
+                "Period",
+                code,
+                "ISO3",
+                "official GEM source value",
+            )
+        except Exception as exc:
+            log(name, "World Bank GEM", "ERROR", str(exc))
         time.sleep(SLEEP_BETWEEN_CALLS)
 
 
@@ -1279,25 +1410,117 @@ MANUAL_SOURCES = [
     {
         "Variable": "OECD Going Digital / OECD.AI",
         "URL": "https://goingdigital.oecd.org/indicators",
-        "Status": "data acquisition still required",
-        "Note": "Current OECD CLI collection is supplementary and does not satisfy this requirement.",
+        "Status": "OECD digital-intensity sector taxonomy documented; additional OECD.AI indicator acquisition still optional",
+        "Note": "The ISIC Rev.4 intensity mapping is embedded separately; CLI remains only a business-cycle supplement.",
+    },
+    {
+        "Variable": "Iran industrial production",
+        "URL": "https://data.imf.org/Datasets/PI",
+        "Status": "official IMF Production Indexes route verified; World Bank GEM automation added as immediately downloadable alternative",
+        "Note": "Do not substitute manufacturing value added for a high-frequency industrial-production indicator.",
+    },
+    {
+        "Variable": "Iran monetary-policy rate",
+        "URL": "https://www.imf.org/-/media/files/publications/cr/2017/cr1763.pdf",
+        "Status": "CBI repo/corridor observations documented as operational candidates",
+        "Note": "IMF documents that Iran historically lacked a conventional single policy rate; use repo/interbank/corridor measures only after the model definition is fixed.",
+    },
+    {
+        "Variable": "Iran digital economy share of GDP",
+        "URL": "https://nezamat.ir/%D9%86%D8%B8%D8%A7%D9%85-%D9%86%D8%A7%D9%85%D9%87-%D8%B3%D9%86%D8%AC%D8%B4-%D9%88-%D8%A8%D9%87-%D8%B1%D9%88%D8%B2%D8%B1%D8%B3%D8%A7%D9%86%DB%8C-%D8%B3%D9%87%D9%85-%D8%B2%DB%8C%D8%B3%D8%AA-%D8%A8%D9%88/",
+        "Status": "two officially reported observations documented; underlying SCI table still preferred if released",
+        "Note": "Keep the reported values separate from interpolated annual panels; no interpolation is authorized.",
     },
 ]
 
 
+OECD_DIGITAL_INTENSITY_TAXONOMY = [
+    ["01-03", "Agriculture, forestry and fishing", "Low"],
+    ["05-09", "Mining and quarrying", "Low"],
+    ["10-12", "Food products, beverages and tobacco", "Low"],
+    ["13-15", "Textiles, wearing apparel, leather", "Medium-low"],
+    ["16-18", "Wood and paper products; printing", "Medium-high"],
+    ["19-23", "Chemicals, rubber, plastics, fuel and other non-metallic mineral products", "Medium-low"],
+    ["24-25", "Basic metals and fabricated metal products", "Medium-low"],
+    ["26-28", "Machinery and equipment", "Medium-high"],
+    ["29-30", "Transport equipment", "High"],
+    ["31-33", "Furniture, other manufacturing, repair/installation", "Medium-high"],
+    ["35-39", "Electricity, gas, water, waste", "Low"],
+    ["41-43", "Construction", "Low"],
+    ["45-47", "Wholesale/retail trade and motor-vehicle repair", "Medium-high"],
+    ["49-53", "Transportation and storage", "Low"],
+    ["55-56", "Accommodation and food service", "Low"],
+    ["58-60", "Publishing, audiovisual and broadcasting", "Medium-high"],
+    ["61", "Telecommunications", "High"],
+    ["62-63", "IT and other information services", "High"],
+    ["64-66", "Financial and insurance activities", "High"],
+    ["68", "Real estate activities", "Low"],
+    ["69-82", "Professional, scientific, technical, administrative and support services", "High"],
+    ["84", "Public administration and defence", "Medium-high"],
+    ["85", "Education", "Medium-low"],
+    ["86-88", "Human health and social work", "Medium-low"],
+    ["90-93", "Arts, entertainment and recreation", "Medium-high"],
+    ["94-96", "Other service activities", "High"],
+]
+
+IRAN_REPORTED_DIGITAL_ECONOMY = [
+    {
+        "Iranian_Year": 1400,
+        "Approx_Gregorian_Year": 2021,
+        "Digital_Economy_Share_GDP_Percent": 4.49,
+        "Evidence_Type": "official estimate reported by deputy ICT minister; underlying SCI table not directly retrieved",
+        "Measurement_Authority_Reported": "Statistical Center of Iran + Ministry of ICT",
+        "Source_URL": "https://ecomotive.ir/2026/06/17/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%AF%DB%8C%D8%AC%DB%8C%D8%AA%D8%A7%D9%84-%DB%B7-%DB%B1%DB%B4-%D8%AF%D8%B1%D8%B5%D8%AF-%D8%A7%D8%B2-%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%DA%A9%D9%84-%DA%A9%D8%B4/",
+        "Method_Framework_URL": "https://nezamat.ir/%D9%86%D8%B8%D8%A7%D9%85-%D9%86%D8%A7%D9%85%D9%87-%D8%B3%D9%86%D8%AC%D8%B4-%D9%88-%D8%A8%D9%87-%D8%B1%D9%88%D8%B2%D8%B1%D8%B3%D8%A7%D9%86%DB%8C-%D8%B3%D9%87%D9%85-%D8%B2%DB%8C%D8%B3%D8%AA-%D8%A8%D9%88/",
+    },
+    {
+        "Iranian_Year": 1403,
+        "Approx_Gregorian_Year": 2024,
+        "Digital_Economy_Share_GDP_Percent": 7.14,
+        "Evidence_Type": "official estimate reported by deputy ICT minister; underlying SCI table not directly retrieved",
+        "Measurement_Authority_Reported": "Statistical Center of Iran + Ministry of ICT",
+        "Source_URL": "https://ecomotive.ir/2026/06/17/%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%D8%AF%DB%8C%D8%AC%DB%8C%D8%AA%D8%A7%D9%84-%DB%B7-%DB%B1%DB%B4-%D8%AF%D8%B1%D8%B5%D8%AF-%D8%A7%D8%B2-%D8%A7%D9%82%D8%AA%D8%B5%D8%A7%D8%AF-%DA%A9%D9%84-%DA%A9%D8%B4/",
+        "Method_Framework_URL": "https://nezamat.ir/%D9%86%D8%B8%D8%A7%D9%85-%D9%86%D8%A7%D9%85%D9%87-%D8%B3%D9%86%D8%AC%D8%B4-%D9%88-%D8%A8%D9%87-%D8%B1%D9%88%D8%B2%D8%B1%D8%B3%D8%A7%D9%86%DB%8C-%D8%B3%D9%87%D9%85-%D8%B2%DB%8C%D8%B3%D8%AA-%D8%A8%D9%88/",
+    },
+]
+
+IRAN_MONETARY_POLICY_CANDIDATES = [
+    {
+        "Iranian_Date": "1403-10-10",
+        "Metric": "Minimum repo rate in open-market operation",
+        "Percent": 23.0,
+        "Interpretation": "Operational OMO rate candidate; do not label as a unique policy rate without professor/model definition.",
+        "Source_URL": "https://42946232.khabarban.com/",
+    },
+    {
+        "Iranian_Date": "1403-10-10",
+        "Metric": "Standing lending facility / corridor ceiling",
+        "Percent": 24.0,
+        "Interpretation": "Ceiling of the CBI interest-rate corridor reported with the OMO release.",
+        "Source_URL": "https://42946232.khabarban.com/",
+    },
+    {
+        "Iranian_Date": "1404-06-31",
+        "Metric": "Minimum repo rate in open-market operation",
+        "Percent": 23.0,
+        "Interpretation": "Operational OMO rate candidate; not automatically equivalent to a conventional single policy rate.",
+        "Source_URL": "https://wikibanki.com/%DA%AF%D8%B2%D8%A7%D8%B1%D8%B4-%D8%B9%D9%85%D9%84%DB%8C%D8%A7%D8%AA-%D8%B9%D8%B1%D8%B6%D9%87-%D8%A7%D8%AC%D8%B1%D8%A7%DB%8C%DB%8C-%D8%B3%DB%8C%D8%A7%D8%B3%D8%AA-%D9%BE%D9%88%D9%84%DB%8C-%D8%A8%D8%A7%D9%86%DA%A9-%D9%85%D8%B1/",
+    },
+]
+
 RESEARCH_REQUIREMENTS = [
     ["BC01","Business cycle","Real GDP level","US high-frequency + country equivalents","FRED GDPC1; WDI NY.GDP.MKTP.KD","US + Iran + cross-country WDI level collected","available"],
     ["BC02","Business cycle","Real GDP growth","Core outcome/control","WDI NY.GDP.MKTP.KD.ZG; IMF NGDP_RPCH; FRED A191RL1Q225SBEA","Iran + cross-country + US collected","available"],
-    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; national equivalents","US collected; Iran equivalent not yet collected","partial"],
+    ["BC03","Business cycle","Industrial production index","Monthly activity control","FRED INDPRO; World Bank GEM IPTOTSAKD/IPTOTNSKD; IMF Production Indexes","US collected; World Bank GEM automation added for Iran/cross-country validation","partial pending run validation"],
     ["BC04","Business cycle","Unemployment rate","Labor control","WDI SL.UEM.TOTL.ZS; BLS/FRED","Iran annual + cross-country + US monthly collected","available"],
     ["BC05","Business cycle","Nonfarm payroll employment","US labor control","FRED PAYEMS / BLS CES0000000001","US collected; not an Iran series","available US-only"],
     ["BC06","Business cycle","Recession indicator/dating","Regime variable","FRED USREC / NBER","US collected; not an Iran series","available US-only"],
-    ["BC07","Business cycle","Policy interest rate","Monetary-policy interaction","FRED FEDFUNDS candidate; national central banks","US candidate collected; exact country-equivalent definition pending","partial / definition pending"],
+    ["BC07","Business cycle","Policy interest rate","Monetary-policy interaction","FRED FEDFUNDS candidate; CBI open-market-operation corridor; IMF monetary framework notes","US candidate collected; Iran repo/corridor snapshots documented, but no single conventional policy-rate series is imposed","partial / proxy available"],
     ["DE01","Digital economy","Internet penetration","Digital intensity","WDI IT.NET.USER.ZS","Iran + cross-country collected","available"],
     ["DE02","Digital economy","Fixed broadband subscriptions per 100","Digital intensity","WDI IT.NET.BBND.P2","Iran + cross-country collected","available"],
     ["DE03","Digital economy","High-technology exports (% manufactured exports)","Digital trade/intensity","WDI TX.VAL.TECH.MF.ZS","Iran + cross-country collected","available"],
     ["DE04","Digital economy","R&D expenditure (% GDP)","Innovation intensity","WDI GB.XPD.RSDV.GD.ZS","Iran + cross-country collected","available"],
-    ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran equivalent not yet found","partial"],
+    ["DE05","Digital economy","Digital economy share of GDP","National-account digital share","BEA Digital Economy + national equivalents","US BEA 2017-2022 collected; Iran officially reported estimates documented for 1400 and 1403 with methodology caveat","partial; sparse Iran observations"],
     ["DE06","Digital economy","Composite digital-transformation index","Cross-sectional/panel digital intensity","World Bank DAI; OECD Going Digital; DESI","World Bank DAI 2014/2016 workbook collected, including Iran; OECD Going Digital remains a supplementary route","partial; DAI is sparse cross-section"],
     ["AI01","AI-specific","Private investment in AI","AI capital intensity","CSET/ETO; Stanford HAI; OECD.AI","CSET/ETO disclosed + estimated annual country data collected with completeness flags","available from CSET/ETO; other source variants optional"],
     ["AI02","AI-specific","AI patent filings","Innovation proxy","CSET/ETO; OECD.AI","CSET/ETO annual country/field patent applications collected; completeness flags retained","available from CSET/ETO"],
@@ -1314,7 +1537,7 @@ RESEARCH_REQUIREMENTS = [
     ["LB07","Labor/structure","Labor turnover","Matching efficiency","FRED JTSHIL / JTSQUL / JTSTSL","US collected","available US-only"],
     ["PR01","Prices","Headline CPI/inflation","Price control/outcome","WDI FP.CPI.TOTL.ZG; FRED CPIAUCSL; BLS CUUR0000SA0","Iran + cross-country + US collected","available"],
     ["PR02","Prices","Core CPI / core PCE","Underlying inflation","FRED CPILFESL / PCEPILFE","US collected","available US-only"],
-    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series","BLS PPI candidates collected for Information, data processing/hosting, wired telecom and wireless telecom","partial; sector mapping still pending"],
+    ["PR03","Prices","Sectoral CPI/PPI by industry","H3 sectoral persistence","BLS sector price series + OECD digital-intensity taxonomy","BLS PPI candidates collected and OECD ISIC Rev.4 digital-intensity mapping embedded","partial; broader sector-price universe still needed"],
     ["PR04","Prices","Inflation volatility","Derived rolling standard deviation","Derived from price series","raw inputs partly collected; window/frequency not approved","derived methodology pending"],
     ["FN01","Finance/uncertainty","Economic Policy Uncertainty","H6 uncertainty measure","FRED USEPUINDXM / USEPUINDXD","US monthly + daily collected","available US-only"],
     ["FN02","Finance/uncertainty","VIX","Financial interaction","FRED VIXCLS","US market collected","available US-only"],
@@ -1328,7 +1551,7 @@ RESEARCH_REQUIREMENTS = [
 HYPOTHESIS_DATA_MATRIX = [
     ["H1","Digital/AI-capex growth vs productivity with lags","Digital capex; labor productivity; TFP; long history","US capex/productivity/TFP + WDI country labor productivity + CSET country AI investment collected","partial","Country-year overlap and the final digital/AI-capex definition must be audited; no estimation authorized"],
     ["H2","Employment volatility/output volatility by AI exposure","AIOE/AIIE; occupation/industry employment; output; crosswalk","AIOE/AIIE exposure + WDI employment-to-population/output series (including Iran) collected","partial","Compatible occupation/industry historical employment-output crosswalk is still needed"],
-    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","Aggregate prices + BLS monthly PPI candidates for several ICT-heavy industries collected","partial","A broader sector universe and an approved digital-intensity mapping are still needed"],
+    ["H3","Sectoral price persistence vs digital intensity","Sectoral CPI/PPI; sector digital intensity; persistence definition","BLS monthly PPI candidates + official OECD ISIC Rev.4 digital-intensity taxonomy collected","partial","Broader sector-price coverage and persistence-window definition remain; digital-intensity mapping itself is now documented"],
     ["H4","Cross-asset correlation/volatility during AI-capex growth","Multiple asset returns; AI/digital capex; window definition","VIX, capex and several market-level candidate series collected","partial","Return construction, final asset universe and frequency are still to be specified"],
     ["H5","Post-2023 volatility of information-processing investment contribution","Contribution series; comparator components; long history","A679RZ2Q224SBEA collected","partial","Research document mislabels this as total-GDP contribution; comparator components must be selected"],
     ["H6","EPU around major AI releases followed by weaker non-AI investment","EPU; release calendar; non-AI investment","EPU, Epoch model release dates and nonresidential-investment candidates collected","partial","Major-event selection and the final non-AI investment definition are still to be specified"],
@@ -1343,6 +1566,18 @@ def write_requirement_matrices(writer) -> None:
     )
     excel_safe_dataframe(pd.DataFrame(HYPOTHESIS_DATA_MATRIX, columns=hyp_cols)).to_excel(
         writer, sheet_name="Hypothesis Matrix", index=False
+    )
+    excel_safe_dataframe(
+        pd.DataFrame(
+            OECD_DIGITAL_INTENSITY_TAXONOMY,
+            columns=["ISIC_Rev4_Divisions", "Sector", "Digital_Intensity"],
+        )
+    ).to_excel(writer, sheet_name="OECD Digital Intensity", index=False)
+    excel_safe_dataframe(pd.DataFrame(IRAN_REPORTED_DIGITAL_ECONOMY)).to_excel(
+        writer, sheet_name="Iran Digital Economy", index=False
+    )
+    excel_safe_dataframe(pd.DataFrame(IRAN_MONETARY_POLICY_CANDIDATES)).to_excel(
+        writer, sheet_name="Iran Monetary Rates", index=False
     )
 
 
@@ -1371,7 +1606,7 @@ def format_client_workbook(writer) -> None:
     ws["A7"] = "Research stage"
     ws["B7"] = "This file is a data delivery and coverage workbook. It does not contain econometric estimates."
     ws["A9"] = "Useful sheets"
-    ws["B9"] = "Iran Data; Iran Coverage; Country Summary; Coverage; Variable Index; Research Questions; Data Dictionary; Source Follow-up; Source Log; Method Notes"
+    ws["B9"] = "Iran Data; Iran Coverage; Iran Digital Economy; Iran Monetary Rates; Country Summary; Coverage; Variable Index; Research Questions; OECD Digital Intensity; Data Dictionary; Source Follow-up; Source Log; Method Notes"
     ws["A11"] = "Source note"
     ws["B11"] = "Source URLs and series identifiers are retained in the data dictionary and source-specific sheets."
     ws.column_dimensions["A"].width = 22
@@ -1426,8 +1661,9 @@ def format_client_workbook(writer) -> None:
                 sh.column_dimensions[letter].width = min(max(max_len + 2, 11), 38)
 
     # Put the review sheets directly after Read Me; leave all source sheets behind them.
-    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Country Summary", "Coverage", "Variable Index",
-                 "Research Questions", "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
+    preferred = ["Read Me", "Iran Data", "Iran Coverage", "Iran Digital Economy", "Iran Monetary Rates",
+                 "Country Summary", "Coverage", "Variable Index", "Research Questions", "OECD Digital Intensity",
+                 "Data Dictionary", "Method Notes", "Source Follow-up", "Source Log"]
     ordered = []
     seen = set()
     for name in preferred:
@@ -1447,6 +1683,7 @@ def main() -> None:
         with pd.ExcelWriter(TEMP_OUTPUT_FILE, engine="openpyxl") as writer:
             collect_fred(writer)
             collect_worldbank(writer)
+            collect_worldbank_gem(writer)
             collect_bea(writer)
             collect_bls(writer)
             collect_oecd(writer)
@@ -1490,6 +1727,7 @@ def main() -> None:
                         "HighTech_Exports": "TX.VAL.TECH.MF.ZS",
                         "Labor_Productivity": "SL.GDP.PCAP.EM.KD",
                         "Employment_Ratio": "SL.EMP.TOTL.SP.ZS",
+                        "Industrial_Production_GEM": "IPTOTSAKD",
                         "AI_Patents": "patents_yearly_applications.csv",
                     }
                     investment_ids = {
