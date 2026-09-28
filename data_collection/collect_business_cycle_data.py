@@ -1038,9 +1038,13 @@ def collect_worldbank_dai(writer) -> None:
         hrefs = re.findall(r'href="([^"]+\\.xlsx(?:\\?[^"]*)?)"', page.text, flags=re.I)
         if not hrefs:
             hrefs = re.findall(r"href='([^']+\\.xlsx(?:\\?[^']*)?)'", page.text, flags=re.I)
-        if not hrefs:
-            raise ValueError("No XLSX link found on the official DAI page")
-        file_url = urljoin(page_url, hrefs[0])
+        if hrefs:
+            file_url = urljoin(page_url, hrefs[0])
+        else:
+            # The current World Bank page renders the download control without
+            # exposing the target href in the static HTML. This is the World Bank
+            # file referenced for the same DAI long-form download.
+            file_url = "https://pubdocs.worldbank.org/en/625521534508595697/DAI-for-web.xlsx"
         r = SESSION.get(file_url, timeout=REQUEST_TIMEOUT)
         r.raise_for_status()
         sheets = pd.read_excel(io.BytesIO(r.content), sheet_name=None)
