@@ -3,372 +3,113 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#061019" />
-  <meta name="color-scheme" content="dark" />
-  <title>Digital Economy × TFP | Research Workspace</title>
-  <meta name="description" content="فضای پژوهش و تحلیل اقتصادسنجی اقتصاد دیجیتال و بهره‌وری کل عوامل تولید" />
+  <meta name="theme-color" content="#071019" />
+  <title>AI × Digital Economy × Business Cycles</title>
+  <meta name="description" content="پرتال جمع‌آوری و آماده‌سازی داده پروژه اقتصاد دیجیتال، هوش مصنوعی و چرخه‌های تجاری" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="ambient ambient-a"></div>
-  <div class="ambient ambient-b"></div>
+  <div class="glow g1"></div><div class="glow g2"></div>
 
-  <header class="site-header">
-    <div class="header-main">
-      <a class="brand" href="#overview" aria-label="صفحه اصلی">
-        <span class="brand-mark">Σ</span>
-        <span class="brand-text">
-          <strong>Digital Economy × TFP</strong>
-          <small>Econometric Research</small>
-        </span>
-      </a>
-
-      <div class="header-status">
-        <span class="status-dot"></span>
-        <span id="headerStage">در انتظار مدل نهایی</span>
-      </div>
-    </div>
-
-    <nav class="main-nav" aria-label="بخش‌های پروژه">
-      <a href="#data">داده‌ها</a>
-      <a href="#model">مدل</a>
-      <a href="#results">نتایج</a>
-      <a href="#demo">نمونه اجرا</a>
-      <a href="#workflow">روند کار</a>
+  <header class="header">
+    <a class="brand" href="#top">
+      <span class="mark">∿</span>
+      <span>
+        <b>AI × Digital Economy</b>
+        <small>Business Cycle Research</small>
+      </span>
+    </a>
+    <nav>
+      <a href="#collection">داده‌ها</a>
+      <a href="#sources">منابع</a>
+      <a href="#tracks">مسیر تحلیل</a>
+      <a href="#next">مرحله بعد</a>
     </nav>
+    <span class="live"><i></i> Data collection</span>
   </header>
 
-  <main class="shell">
-    <section id="overview" class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">RESEARCH WORKSPACE</p>
-        <h1>تحلیل اقتصاد دیجیتال و بهره‌وری کل عوامل تولید</h1>
+  <main id="top" class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">PHASE 01 · DATA COLLECTION</p>
+        <h1>اقتصاد دیجیتال، هوش مصنوعی و پویایی چرخه‌های تجاری</h1>
         <p class="lead">
-          بخش آماده‌سازی و کنترل داده آماده است. مدل اصلی را بعد از دریافت توضیحات دقیق استاد
-          وارد می‌کنیم. از آن مرحله به بعد، جدول‌ها و نمودارهای این صفحه مستقیماً از خروجی Python ساخته می‌شوند.
+          فاز فعلی پروژه جمع‌آوری و کنترل داده است. اسکریپت Python به منابع رسمی متصل شده،
+          فایل Excel چندشیتی ساخته شده و حالا باید پوشش زمانی، فرکانس و خلأهای داده را کامل کنیم.
         </p>
-
-        <div class="hero-actions">
-          <a class="button primary" href="#results">بخش نتایج</a>
-          <a class="button" href="#demo">دیدن نمونه اجرا</a>
-          <a class="button" href="./downloads/dataset_template.csv" download>قالب ورود داده</a>
+        <div class="actions">
+          <a class="btn primary" href="#collection">نتیجه اجرای فعلی</a>
+          <a class="btn" href="https://github.com/mrst10578/Digital-Economy-TFP-Research/actions/runs/36397546430" target="_blank" rel="noreferrer">اجرای Python در GitHub</a>
         </div>
       </div>
-
-      <aside class="project-card">
-        <div class="project-card-head">
-          <span>وضعیت فعلی</span>
-          <span class="badge waiting" id="stageBadge">PENDING</span>
-        </div>
-        <strong id="stageTitle">منتظر مشخصات مدل استاد هستیم</strong>
-        <p id="stageDescription">
-          کدهای ورود، پاک‌سازی و بررسی داده آماده‌اند. بخش برآورد هنوز عمداً نهایی نشده است.
-        </p>
-        <div class="project-card-meta">
-          <span>آخرین به‌روزرسانی</span>
-          <b id="lastUpdated">...</b>
-        </div>
+      <aside class="hero-card">
+        <span class="label">آخرین اجرای جمع‌آوری</span>
+        <strong>موفق</strong>
+        <p>فایل Excel ساخته و به‌عنوان Artifact ذخیره شد.</p>
+        <div class="mini"><span>۱۴ شیت</span><span>۶ منبع فعال/بررسی‌شده</span></div>
       </aside>
     </section>
 
-    <section class="metrics" aria-label="خلاصه داده">
-      <article class="metric">
-        <span>تعداد مشاهده</span>
-        <strong id="metricRows">—</strong>
-        <small>Observations</small>
-      </article>
-      <article class="metric">
-        <span>تعداد کشور</span>
-        <strong id="metricEntities">—</strong>
-        <small>Entities</small>
-      </article>
-      <article class="metric">
-        <span>بازه زمانی</span>
-        <strong id="metricPeriod">—</strong>
-        <small>Time span</small>
-      </article>
-      <article class="metric">
-        <span>خانه‌های خالی</span>
-        <strong id="metricMissing">—</strong>
-        <small>Missing cells</small>
-      </article>
-    </section>
-
-    <section id="data" class="section-grid">
-      <article class="panel span-7">
-        <div class="section-head">
-          <div>
-            <p class="kicker">DATA</p>
-            <h2>بررسی داده‌ها</h2>
-          </div>
-          <span class="badge ready">READY</span>
-        </div>
-
-        <div class="audit-grid">
-          <div class="audit-item">
-            <span>تعداد ستون‌ها</span>
-            <b id="auditColumns">—</b>
-          </div>
-          <div class="audit-item">
-            <span>رکورد تکراری کشور-سال</span>
-            <b id="auditDuplicates">—</b>
-          </div>
-          <div class="audit-item">
-            <span>کمترین تعداد سال برای یک کشور</span>
-            <b id="auditMinPeriods">—</b>
-          </div>
-          <div class="audit-item">
-            <span>بیشترین تعداد سال برای یک کشور</span>
-            <b id="auditMaxPeriods">—</b>
-          </div>
-        </div>
-
-        <div class="info-note" id="dataNote">
-          هنوز فایل نهایی داده وارد پروژه نشده. وقتی فایل واقعی اضافه شود، این اعداد خودکار از خروجی Python پر می‌شوند.
-        </div>
-      </article>
-
-      <article class="panel span-5">
-        <div class="section-head">
-          <div>
-            <p class="kicker">VARIABLES</p>
-            <h2>ستون‌های فعلی پروژه</h2>
-          </div>
-        </div>
-        <div class="variable-list" id="expectedColumns"></div>
-      </article>
-    </section>
-
-    <section id="model" class="section-grid">
-      <article class="panel span-5">
-        <div class="section-head">
-          <div>
-            <p class="kicker">MODEL</p>
-            <h2>مدل اقتصادسنجی</h2>
-          </div>
-          <span class="badge waiting" id="modelBadge">PENDING</span>
-        </div>
-
-        <div class="model-box">
-          <span class="model-icon">ƒ</span>
-          <div>
-            <strong id="modelTitle">مدل نهایی هنوز مشخص نشده</strong>
-            <p id="modelMessage">
-              استاد مدل را مشخص می‌کند و همان نسخه در Python پیاده می‌شود. فعلاً چیزی از روی مقاله حدس نزده‌ایم.
-            </p>
-          </div>
-        </div>
-      </article>
-
-      <article class="panel span-7">
-        <div class="section-head">
-          <div>
-            <p class="kicker">BEFORE ESTIMATION</p>
-            <h2>چیزهایی که قبل از برآورد باید قطعی شوند</h2>
-          </div>
-        </div>
-
-        <div class="spec-grid">
-          <div><span>01</span><b>معادله مدل</b><small>Functional form</small></div>
-          <div><span>02</span><b>متغیر وابسته</b><small>Dependent variable</small></div>
-          <div><span>03</span><b>متغیرهای توضیحی</b><small>Regressors</small></div>
-          <div><span>04</span><b>روش برآورد</b><small>Estimator</small></div>
-          <div><span>05</span><b>وقفه و اثرات</b><small>Lags / effects</small></div>
-          <div><span>06</span><b>آزمون‌های لازم</b><small>Diagnostics</small></div>
-        </div>
-      </article>
-    </section>
-
-    <section id="results" class="results-section">
-      <div class="section-head results-head">
-        <div>
-          <p class="kicker">RESULTS</p>
-          <h2>نتایج اصلی پژوهش</h2>
-        </div>
-        <span class="badge neutral" id="resultsBadge">NOT RUN YET</span>
+    <section id="collection" class="section">
+      <div class="head"><div><p>LAST RUN</p><h2>چه داده‌هایی الان داریم؟</h2></div><span class="pill ok">RUN SUCCESS</span></div>
+      <div class="stats">
+        <article><span>World Bank</span><b>34,450</b><small>۵ شاخص × ۶,۸۹۰ ردیف</small></article>
+        <article><span>OECD CLI</span><b>7,040</b><small>ردیف</small></article>
+        <article><span>IMF</span><b>21,703</b><small>GDP growth + Inflation</small></article>
+        <article><span>BLS</span><b>464</b><small>۴ سری × ۱۱۶ ردیف</small></article>
       </div>
 
-      <div class="result-grid">
-        <article class="panel result-panel">
-          <div class="mini-title">
-            <span>COEFFICIENTS</span>
-            <b>ضرایب مدل</b>
-          </div>
-          <div class="empty-state" id="coefficientsState">
-            <div class="empty-mark">β</div>
-            <strong>هنوز مدل اصلی اجرا نشده</strong>
-            <p>بعد از ورود مدل استاد و داده واقعی، ضریب، خطای استاندارد، سطح معناداری و فاصله اطمینان اینجا می‌آیند.</p>
-          </div>
-          <div id="coefficientsTable" class="table-wrap hidden"></div>
-        </article>
-
-        <article class="panel result-panel">
-          <div class="mini-title">
-            <span>DIAGNOSTICS</span>
-            <b>آزمون‌ها</b>
-          </div>
-          <div class="empty-state compact" id="diagnosticsState">
-            <div class="empty-mark">χ²</div>
-            <strong>هنوز چیزی برای گزارش نداریم</strong>
-            <p>نوع آزمون‌ها به مدل نهایی بستگی دارد.</p>
-          </div>
-          <div id="diagnosticsList" class="diagnostics hidden"></div>
-        </article>
-      </div>
-
-      <article class="panel chart-panel">
-        <div class="mini-title">
-          <span>FIGURES</span>
-          <b>نمودارهای اصلی</b>
-        </div>
-        <div class="chart-empty" id="chartState">
-          <svg viewBox="0 0 900 220" role="img" aria-label="جای نمودار">
-            <path d="M30 180H870" />
-            <path d="M30 30V180" />
-            <path class="ghost-line" d="M60 160 C180 150, 240 120, 330 130 S520 70, 620 90 S760 50,840 65" />
-          </svg>
-          <p>بعد از ورود داده واقعی، نمودارها از همان فایل ساخته می‌شوند.</p>
-        </div>
-      </article>
-    </section>
-
-    <section id="demo" class="demo-section">
-      <div class="demo-heading">
-        <div>
-          <p class="kicker">DEMO ANALYSIS</p>
-          <h2>نمونه اجرای آزمایشی</h2>
-          <p>
-            این قسمت فقط برای نشان دادن شکل خروجی نهایی ساخته شده. اعداد واقعی نیستند؛
-            داده‌ها را در بازه‌های معقول ساخته‌ایم تا مسیر تحلیل، جدول‌ها و نمودارها قابل تست باشند.
-          </p>
-        </div>
-        <div class="demo-warning">داده ساختگی • برای نمونه کار</div>
-      </div>
-
-      <div class="demo-metrics">
-        <div><span>کشورها</span><b>۶</b></div>
-        <div><span>سال‌ها</span><b>۲۰۱۹–۲۰۲۳</b></div>
-        <div><span>مشاهدات</span><b>۳۰</b></div>
-        <div><span>Missing</span><b>۰</b></div>
-      </div>
-
-      <div class="section-grid demo-grid">
-        <article class="panel span-7">
-          <div class="section-head">
-            <div>
-              <p class="kicker">SYNTHETIC SERIES</p>
-              <h2>نمونه روند TFP</h2>
-            </div>
-            <select id="demoCountry" class="select-control" aria-label="انتخاب کشور"></select>
-          </div>
-          <div class="demo-chart">
-            <svg id="demoChart" viewBox="0 0 760 300" role="img" aria-label="نمودار نمونه TFP"></svg>
-          </div>
-        </article>
-
-        <article class="panel span-5">
-          <div class="section-head">
-            <div>
-              <p class="kicker">TECHNICAL TEST</p>
-              <h2>نمونه خروجی برآورد</h2>
-            </div>
-          </div>
-          <p class="small-copy">
-            این مدل فقط برای تست فنی رابط اجرا شده و مدل نهایی تحقیق نیست.
-          </p>
-          <div class="demo-regression">
-            <div><span>Digital economy</span><b>0.00386</b><small>p = 0.268</small></div>
-            <div><span>AI</span><b>0.00167</b><small>p = 0.502</small></div>
-            <div><span>DE × AI</span><b>0.00003</b><small>p = 0.442</small></div>
-            <div><span>R²</span><b>0.927</b><small>OLS on synthetic sample</small></div>
-          </div>
-        </article>
-      </div>
-
-      <article class="panel demo-table-panel">
-        <div class="section-head">
-          <div>
-            <p class="kicker">SAMPLE DATA</p>
-            <h2>چند ردیف از دیتای آزمایشی</h2>
-          </div>
-          <a class="text-link" href="./data/demo_synthetic.csv" download>دانلود CSV نمونه</a>
-        </div>
-        <div class="table-wrap">
-          <table id="demoTable">
-            <thead>
-              <tr>
-                <th>Country</th>
-                <th>Year</th>
-                <th>Digital Economy</th>
-                <th>AI</th>
-                <th>Human Capital</th>
-                <th>Trade Openness</th>
-                <th>TFP</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-
-    <section id="workflow" class="panel workflow-panel">
-      <div class="section-head">
-        <div>
-          <p class="kicker">WORKFLOW</p>
-          <h2>روند کار پروژه</h2>
-        </div>
-      </div>
-
-      <div class="workflow">
-        <div class="flow-step done"><span>01</span><b>Input</b><small>ورود داده</small></div>
-        <div class="flow-connector"></div>
-        <div class="flow-step done"><span>02</span><b>Audit</b><small>کنترل داده</small></div>
-        <div class="flow-connector"></div>
-        <div class="flow-step done"><span>03</span><b>Prepare</b><small>آماده‌سازی</small></div>
-        <div class="flow-connector"></div>
-        <div class="flow-step current"><span>04</span><b>Specify</b><small>مدل استاد</small></div>
-        <div class="flow-connector"></div>
-        <div class="flow-step"><span>05</span><b>Estimate</b><small>برآورد</small></div>
-        <div class="flow-connector"></div>
-        <div class="flow-step"><span>06</span><b>Report</b><small>خروجی نهایی</small></div>
+      <div class="panel table-panel">
+        <table>
+          <thead><tr><th>منبع</th><th>داده</th><th>وضعیت</th><th>حجم</th></tr></thead>
+          <tbody>
+            <tr><td>World Bank</td><td>Internet Users</td><td><span class="dot okdot"></span>دریافت شد</td><td>6,890</td></tr>
+            <tr><td>World Bank</td><td>GDP Growth</td><td><span class="dot okdot"></span>دریافت شد</td><td>6,890</td></tr>
+            <tr><td>World Bank</td><td>Unemployment</td><td><span class="dot okdot"></span>دریافت شد</td><td>6,890</td></tr>
+            <tr><td>World Bank</td><td>CPI Inflation</td><td><span class="dot okdot"></span>دریافت شد</td><td>6,890</td></tr>
+            <tr><td>World Bank</td><td>ICT Service Exports</td><td><span class="dot okdot"></span>دریافت شد</td><td>6,890</td></tr>
+            <tr><td>BLS</td><td>Unemployment / Payroll / CPI / Computer Systems Employment</td><td><span class="dot okdot"></span>دریافت شد</td><td>116 × 4</td></tr>
+            <tr><td>OECD</td><td>Composite Leading Indicator</td><td><span class="dot okdot"></span>دریافت شد</td><td>7,040</td></tr>
+            <tr><td>IMF</td><td>Real GDP Growth</td><td><span class="dot okdot"></span>دریافت شد</td><td>10,914</td></tr>
+            <tr><td>IMF</td><td>Inflation</td><td><span class="dot okdot"></span>دریافت شد</td><td>10,789</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
-    <section class="section-grid final-row">
-      <article class="panel span-7">
-        <div class="section-head">
-          <div>
-            <p class="kicker">NOTE</p>
-            <h2>مرز نمونه و نتیجه واقعی</h2>
-          </div>
-        </div>
-        <p class="body-copy">
-          بخش «نمونه اجرای آزمایشی» با داده ساختگی ساخته شده و فقط شکل کار را نشان می‌دهد.
-          نتیجه واقعی فقط بعد از ورود داده نهایی و اجرای مدل موردنظر استاد در بخش «نتایج اصلی پژوهش» نمایش داده می‌شود.
-        </p>
-      </article>
+    <section id="sources" class="section">
+      <div class="head"><div><p>SOURCE STATUS</p><h2>جاهای خالی فعلی</h2></div></div>
+      <div class="cards">
+        <article class="panel warn"><span>FRED</span><h3>کلید API لازم است</h3><p>سری‌های اصلی آمریکا، از GDP و رکود NBER تا VIX و سرمایه‌گذاری پردازش اطلاعات، بعد از تنظیم کلید دریافت می‌شوند.</p></article>
+        <article class="panel warn"><span>BEA</span><h3>کلید API لازم است</h3><p>جدول NIPA فعلاً به دلیل نبود کلید اجرا نشده. لینک قدیمی فایل Digital Economy هم 404 داده و باید منبع جدیدش جایگزین شود.</p></article>
+        <article class="panel warn"><span>IMF AIPI</span><h3>پاسخ API خالی بود</h3><p>شاخص AI Preparedness در endpoint فعلی داده‌ای برنگرداند و باید مسیر دریافت آن جداگانه بررسی شود.</p></article>
+        <article class="panel neutral"><span>MANUAL</span><h3>سه منبع دستی</h3><p>Census BTOS، World Bank Digital Adoption Index و Stanford HAI در لیست دریافت دستی باقی مانده‌اند.</p></article>
+      </div>
+    </section>
 
-      <article class="panel span-5 technical">
-        <div class="section-head">
-          <div>
-            <p class="kicker">STACK</p>
-            <h2>ابزارهای پروژه</h2>
-          </div>
-        </div>
-        <div class="chips">
-          <span>Python</span><span>pandas</span><span>statsmodels</span>
-          <span>linearmodels</span><span>Jupyter</span><span>GitHub Actions</span>
-        </div>
-      </article>
+    <section id="tracks" class="section">
+      <div class="head"><div><p>EMPIRICAL DESIGN</p><h2>بعد از تکمیل داده، دو مسیر داریم</h2></div></div>
+      <div class="tracks">
+        <article class="track panel"><em>A</em><div><h3>آمریکا با فرکانس بالا</h3><p>داده‌های ماهانه و فصلی برای بررسی واکنش پویای چرخه‌ها، با تمرکز بر FRED، BEA، BLS و BTOS.</p></div></article>
+        <article class="track panel"><em>B</em><div><h3>پنل بین‌کشوری</h3><p>داده‌های سالانه اقتصاد دیجیتال و AI برای کشورهای فعال در AI، بعد از بررسی واقعی پوشش و missingها.</p></div></article>
+      </div>
+    </section>
+
+    <section id="next" class="section">
+      <div class="panel next">
+        <div><p class="eyebrow">NEXT STEP</p><h2>فعلاً مدل نمی‌زنیم؛ اول دیتاست را می‌بندیم.</h2></div>
+        <ol>
+          <li><b>۱</b><span>اضافه‌کردن کلیدهای FRED و BEA</span></li>
+          <li><b>۲</b><span>رفع AIPI و لینک قدیمی BEA</span></li>
+          <li><b>۳</b><span>Audit بازه زمانی، فرکانس و missing value هر سری</span></li>
+          <li><b>۴</b><span>ساخت دیتاست‌های نهایی Track A و Track B</span></li>
+          <li><b>۵</b><span>بعد از آن پیاده‌سازی مدل‌های اقتصادسنجی در Python</span></li>
+        </ol>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <span>Digital Economy × TFP Research</span>
-    <span id="buildStamp">...</span>
-  </footer>
-
+  <footer class="footer"><span>AI × Digital Economy × Business Cycles</span><span id="stamp"></span></footer>
   <script src="./app.js"></script>
 </body>
 </html>
