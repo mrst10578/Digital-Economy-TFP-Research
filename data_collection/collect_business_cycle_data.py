@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import time
 from datetime import datetime
 
@@ -63,7 +64,7 @@ def log(name: str, source: str, status: str, detail: str = "", rows: int | None 
         "Source": source,
         "Status": status,
         "Rows": rows,
-        "Detail": detail,
+        "Detail": clean_excel_text(str(detail)) if detail is not None else "",
         "Retrieved_At": RETRIEVED_AT,
     })
     suffix = f" ({detail})" if detail else ""
@@ -96,11 +97,28 @@ def safe_sheet_name(name: str) -> str:
     return name[:31]
 
 
+_ILLEGAL_EXCEL_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def clean_excel_text(value):
+    if isinstance(value, str):
+        return _ILLEGAL_EXCEL_CHARS.sub("", value)[:32767]
+    return value
+
+
+def excel_safe_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    for col in out.columns:
+        if pd.api.types.is_object_dtype(out[col].dtype) or pd.api.types.is_string_dtype(out[col].dtype):
+            out[col] = out[col].map(clean_excel_text)
+    return out
+
+
 def write_sheet(writer, df: pd.DataFrame | None, name: str, source: str) -> None:
     if df is None or df.empty:
         log(name, source, "EMPTY")
         return
-    df.to_excel(writer, sheet_name=safe_sheet_name(name), index=False)
+    excel_safe_dataframe(df).to_excel(writer, sheet_name=safe_sheet_name(name), index=False)
     log(name, source, "OK", f"{len(df)} rows", len(df))
 
 
@@ -828,26 +846,26 @@ def main() -> None:
             collect_epoch_ai(writer)
             collect_aioe(writer)
 
-            pd.DataFrame(MANUAL_SOURCES).to_excel(
+            excel_safe_dataframe(pd.DataFrame(MANUAL_SOURCES)).to_excel(
                 writer, sheet_name="Manual Sources", index=False
             )
 
             coverage_df = pd.DataFrame(_coverage_rows)
             if not coverage_df.empty:
-                coverage_df.to_excel(writer, sheet_name="Coverage", index=False)
+                excel_safe_dataframe(coverage_df).to_excel(writer, sheet_name="Coverage", index=False)
                 iran_cov = coverage_df[
                     coverage_df["country_iso3"].astype(str) == "IRN"
                 ].copy()
-                iran_cov.to_excel(writer, sheet_name="Iran Coverage", index=False)
+                excel_safe_dataframe(iran_cov).to_excel(writer, sheet_name="Iran Coverage", index=False)
 
             iran_df = pd.DataFrame(_iran_rows)
             if not iran_df.empty:
-                iran_df.to_excel(writer, sheet_name="Iran Data", index=False)
+                excel_safe_dataframe(iran_df).to_excel(writer, sheet_name="Iran Data", index=False)
 
-            pd.DataFrame(_dictionary_rows).drop_duplicates().to_excel(
+            excel_safe_dataframe(pd.DataFrame(_dictionary_rows).drop_duplicates()).to_excel(
                 writer, sheet_name="Variable Dictionary", index=False
             )
-            pd.DataFrame(_log_rows).to_excel(
+            excel_safe_dataframe(pd.DataFrame(_log_rows)).to_excel(
                 writer, sheet_name="Collection Status", index=False
             )
 
@@ -873,7 +891,7 @@ def main() -> None:
                     "Implementation": "No hypothesis test or model estimation is executed by this collector.",
                 },
             ])
-            audit_notes.to_excel(writer, sheet_name="Audit Notes", index=False)
+            excel_safe_dataframe(audit_notes).to_excel(writer, sheet_name="Audit Notes", index=False)
 
         os.replace(TEMP_OUTPUT_FILE, OUTPUT_FILE)
     finally:
