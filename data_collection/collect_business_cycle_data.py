@@ -1050,6 +1050,93 @@ def collect_imf(writer) -> None:
         time.sleep(SLEEP_BETWEEN_CALLS)
 
 
+def _fetch_imf_sdmx_csv(dataflow: str, country: str = "IRN") -> pd.DataFrame:
+    url = f"https://api.imf.org/external/sdmx/3.0/data/dataflow/IMF.STA/{dataflow}/~/*"
+    r = SESSION.get(
+        url,
+        params={"c[COUNTRY]": country},
+        headers={"Accept": "text/csv"},
+        timeout=max(REQUEST_TIMEOUT, 120),
+    )
+    r.raise_for_status()
+    if not r.text.strip():
+        return pd.DataFrame()
+    df = pd.read_csv(io.StringIO(r.text), low_memory=False)
+    if "COUNTRY" in df.columns:
+        df = df[df["COUNTRY"].astype(str) == country].copy()
+    return df
+
+
+def collect_imf_iran_current_statistics(writer) -> None:
+    """Try current IMF SDMX datasets for Iran production and nationally defined interest rates."""
+    print("\n--- IMF current SDMX: Iran production and rates ---")
+
+    pi_df = pd.DataFrame()
+    pi_source = ""
+    for flow in ("PI", "IND"):
+        try:
+            candidate = _fetch_imf_sdmx_csv(flow, "IRN")
+            if not candidate.empty:
+                pi_df = candidate
+                pi_source = flow
+                break
+        except Exception:
+            continue
+
+    if not pi_df.empty:
+        if "INDICATOR" in pi_df.columns:
+            wanted = {"AIP_IX", "AIP_SA_IX", "AIPMA_IX"}
+            selected = pi_df[pi_df["INDICATOR"].astype(str).isin(wanted)].copy()
+            if not selected.empty:
+                pi_df = selected
+        write_sheet(writer, pi_df, "IMF_Iran_Production_Indexes", f"IMF SDMX {pi_source}")
+        valid = pd.DataFrame()
+        if "OBS_VALUE" in pi_df.columns and "TIME_PERIOD" in pi_df.columns:
+            valid = pi_df[pd.to_numeric(pi_df["OBS_VALUE"], errors="coerce").notna()].copy()
+            for _, row in valid.iterrows():
+                _iran_rows.append({
+                    "source": f"IMF SDMX {pi_source}",
+                    "series_id": row.get("INDICATOR", "industrial_production"),
+                    "country_iso3": "IRN",
+                    "period": row.get("TIME_PERIOD"),
+                    "value": row.get("OBS_VALUE"),
+                    "observation_status": "official IMF Production Indexes source value",
+                    "retrieved_at": RETRIEVED_AT,
+                })
+        if not valid.empty:
+            log("Iran industrial production numeric series", "IMF SDMX", "OK", f"{len(valid)} numeric rows", len(valid))
+        else:
+            log("Iran industrial production numeric series", "IMF SDMX", "NOT_AVAILABLE", "No numeric OBS_VALUE/TIME_PERIOD rows returned")
+    else:
+        log("Iran industrial production numeric series", "IMF SDMX", "NOT_AVAILABLE", "No Iran observations returned from PI/IND public SDMX route")
+
+    try:
+        rate_df = _fetch_imf_sdmx_csv("MFS_IR", "IRN")
+        if not rate_df.empty:
+            write_sheet(writer, rate_df, "IMF_Iran_Interest_Rates", "IMF MFS Interest Rates")
+            valid = pd.DataFrame()
+            if "OBS_VALUE" in rate_df.columns and "TIME_PERIOD" in rate_df.columns:
+                valid = rate_df[pd.to_numeric(rate_df["OBS_VALUE"], errors="coerce").notna()].copy()
+                for _, row in valid.iterrows():
+                    _iran_rows.append({
+                        "source": "IMF MFS Interest Rates",
+                        "series_id": row.get("INDICATOR", "interest_rate"),
+                        "country_iso3": "IRN",
+                        "period": row.get("TIME_PERIOD"),
+                        "value": row.get("OBS_VALUE"),
+                        "observation_status": "official IMF nationally defined interest-rate series; not automatically a single policy-rate equivalent",
+                        "retrieved_at": RETRIEVED_AT,
+                    })
+            if not valid.empty:
+                log("Iran IMF interest-rate panel", "IMF MFS_IR", "OK", f"{len(valid)} numeric rows", len(valid))
+            else:
+                log("Iran IMF interest-rate panel", "IMF MFS_IR", "NOT_AVAILABLE", "No numeric OBS_VALUE/TIME_PERIOD rows returned")
+        else:
+            log("Iran IMF interest-rate panel", "IMF MFS_IR", "NOT_AVAILABLE", "No Iran observations returned from public SDMX route")
+    except Exception as exc:
+        log("Iran IMF interest-rate panel", "IMF MFS_IR", "NOT_AVAILABLE", str(exc))
+
+
 # ---------------------------------------------------------------------------
 # BEA Digital Economy latest official workbook
 # ---------------------------------------------------------------------------
